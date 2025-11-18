@@ -1,10 +1,155 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "base.html" %}
 
-</body>
-</html>
+{% block content %}
+<div class="py-3">
+
+    <!-- Заголовок и Кнопка создания -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Мои проекты</h1>
+        <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#createProjectModal">
+            <i class="bi bi-plus-lg"></i> Создать проект
+        </button>
+    </div>
+
+    <!-- Список проектов -->
+    <div class="row">
+        {% if projects %}
+            {% for project in projects %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm hover-shadow">
+                    <div class="card-body d-flex flex-column">
+
+                        <!-- Верхняя часть: Название + Меню (3 точки) -->
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div style="overflow: hidden;"> <!-- Контейнер для текста -->
+                                <h5 class="card-title text-truncate mb-1" title="{{ project.name }}">
+                                    {{ project.name }}
+                                </h5>
+                                <p class="card-text text-muted small">
+                                    Создан: {{ project.created_at|date:"d.m.Y" }}
+                                </p>
+                            </div>
+
+                            <!-- Выпадающее меню (Dropdown) -->
+                            <div class="dropdown">
+                                <button class="btn btn-link text-dark p-0 ms-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-three-dots-vertical fs-5"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <!-- Пункт: Добавить участника -->
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#addUserModal-{{ project.id }}">
+                                            <i class="bi bi-person-plus me-2"></i>Добавить участника
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <!-- Пункт: Удалить -->
+                                    <li>
+                                        <button class="dropdown-item text-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ project.id }}">
+                                            <i class="bi bi-trash me-2"></i>Удалить проект
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Список участников (можно показать аватарки или кол-во, опционально) -->
+                        <div class="mb-3 small text-muted">
+                            <i class="bi bi-people-fill"></i> Участников: {{ project.users.count }}
+                        </div>
+
+                        <!-- Кнопка "Открыть" во всю ширину внизу -->
+                        <div class="mt-auto">
+                            <a href="{% url 'project_detail' project.id %}" class="btn btn-outline-primary w-100">
+                                Открыть проект
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === МОДАЛКА: УДАЛЕНИЕ === -->
+            <div class="modal fade" id="deleteModal-{{ project.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Удаление проекта</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            Вы действительно хотите удалить проект <strong>"{{ project.name }}"</strong>?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <form action="{% url 'delete_project' project.id %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger">Удалить</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === МОДАЛКА: ДОБАВЛЕНИЕ УЧАСТНИКА === -->
+            <div class="modal fade" id="addUserModal-{{ project.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form action="{% url 'add_user_to_project' project.id %}" method="post">
+                            {% csrf_token %}
+                            <div class="modal-header">
+                                <h5 class="modal-title">Добавить участника</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Username пользователя</label>
+                                    <input type="text" name="username" class="form-control" placeholder="Введите логин (например: hr_anna)" required>
+                                    <div class="form-text">Пользователь должен быть зарегистрирован в системе.</div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="submit" class="btn btn-primary">Добавить</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <div class="alert alert-secondary text-center py-5">
+                    <h4>У вас пока нет проектов</h4>
+                    <p>Нажмите кнопку "Создать проект", чтобы начать работу.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- === МОДАЛКА: СОЗДАНИЕ ПРОЕКТА (Общая) === -->
+<div class="modal fade" id="createProjectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Новый проект</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Название проекта</label>
+                        {{ form.name }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

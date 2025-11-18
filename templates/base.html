@@ -1,0 +1,94 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RecruitFlow{% endblock %}</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- 1. Подключаем Bootstrap CSS (ВАЖНО: перед вашим style.css) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <!-- 2. Подключаем ваш CSS (чтобы ваши стили перекрывали Bootstrap при необходимости) -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body class="d-flex flex-column min-vh-100"> <!-- Классы Bootstrap для прижатия футера -->
+
+    <!-- ======================= ХЕДЕР ======================= -->
+    <!-- Добавил navbar navbar-expand-lg navbar-light bg-light для совместимости с Bootstrap,
+         но оставил ваш класс header для кастомных стилей -->
+    <header class="header navbar navbar-expand-lg navbar-light bg-white border-bottom">
+        <div class="container">
+            <div class="header-logo navbar-brand fw-bold">
+                <!-- Ссылка на главную страницу (projects) -->
+                <a href="{% url 'home' %}" class="text-decoration-none text-dark">RecruitFlow</a>
+            </div>
+
+            <!-- Кнопка меню для мобильных (бургер) -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <nav class="header-nav navbar-nav gap-3">
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'home' %}" class="nav-link text-dark">Проекты</a>
+                        <a href="{% url 'profile' %}" class="nav-link text-dark">Профиль</a>
+
+                        <!-- Форма для выхода (безопасный метод в Django 5.0+) или просто ссылка -->
+                        <form action="{% url 'logout' %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-link nav-link text-dark" style="text-decoration: none;">Выйти</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'login' %}" class="nav-link text-dark">Войти</a>
+                        <a href="{% url 'signup' %}" class="btn btn-primary text-white">Регистрация</a>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- ======================= ОСНОВНОЙ КОНТЕНТ ======================= -->
+    <!-- flex-grow-1 заставляет main занимать всё свободное место, чтобы футер был внизу -->
+    <main class="flex-grow-1 py-4">
+        <div class="container">
+
+            <!-- Блок для сообщений (messages) от Django, если будут ошибки или успехи -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% block content %}
+            {% endblock %}
+        </div>
+    </main>
+
+    <!-- ======================= ФУТЕР ======================= -->
+    <footer class="footer bg-light py-4 border-top mt-auto">
+        <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center">
+            <div class="footer-brand mb-2 mb-md-0">
+                <p class="mb-0 text-muted">&copy; {% now "Y" %} RecruitFlow. Все права защищены.</p>
+            </div>
+            <div class="footer-contacts">
+                <a href="mailto:contact@recruitflow.com" class="text-decoration-none me-3 text-muted">contact@recruitflow.com</a>
+                <a href="https://t.me/your_telegram" target="_blank" class="text-decoration-none text-muted">Telegram</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 3. Подключаем Bootstrap JS (ОБЯЗАТЕЛЬНО для работы модальных окон) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

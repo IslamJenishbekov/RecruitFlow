@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Регистрация — RecruitFlow{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <h2>Создать аккаунт</h2>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {# Проходимся циклом по полям формы для красивой верстки #}
+            {% for field in form %}
+                <div class="form-group">
+                    {{ field.label_tag }}
+                    {{ field }}
+
+                    {# Отображение подсказок (например для пароля) #}
+                    {% if field.help_text %}
+                        <span class="helptext">{{ field.help_text }}</span>
+                    {% endif %}
+
+                    {# Отображение ошибок валидации #}
+                    {% if field.errors %}
+                        <div class="errorlist">
+                            {% for error in field.errors %}
+                                <div>• {{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <button type="submit" class="btn-primary">Зарегистрироваться</button>
+        </form>
+
+        <div class="auth-footer">
+            <p>Уже есть аккаунт? <a href="{% url 'login' %}">Войти</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

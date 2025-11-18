@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Вход — RecruitFlow{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <h2>Вход в систему</h2>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {# Блок для глобальных ошибок (например, "Неверный логин или пароль") #}
+            {% if form.non_field_errors %}
+                <div class="errorlist" style="margin-bottom: 20px; background-color: #ffebee; padding: 10px; border-radius: 6px; border: 1px solid #ffcdd2;">
+                    {% for error in form.non_field_errors %}
+                        <div style="color: #c62828;">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# Цикл по полям формы (обычно Username и Password) #}
+            {% for field in form %}
+                <div class="form-group">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    
+                    {# Ошибки конкретного поля #}
+                    {% if field.errors %}
+                        <div class="errorlist">
+                            {% for error in field.errors %}
+                                <div>• {{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <button type="submit" class="btn-primary">Войти</button>
+            
+            {# Скрытое поле, чтобы перенаправить пользователя туда, куда он хотел попасть до входа #}
+            <input type="hidden" name="next" value="{{ next }}">
+        </form>
+
+        <div class="auth-footer">
+            <p>Нет аккаунта? <a href="{% url 'signup' %}">Зарегистрироваться</a></p>
+            
+            {# Если вы подключили стандартные URL Django для сброса пароля #}
+            {# <p style="margin-top: 10px;"><a href="{% url 'password_reset' %}" style="font-size: 13px; color: #95a5a6;">Забыли пароль?</a></p> #}
+        </div>
+    </div>
+</div>
+{% endblock %}
