@@ -1,0 +1,57 @@
+# Файлы виртуального окружения
+/.venv/
+/env/
+/.env
+/virtual/
+/venv.*
+/env.*
+
+# Кэш и скомпилированные файлы Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Директории с яйцами (egg) и дистрибутивами
+/.eggs/
+/*.egg-info/
+/dist/
+/build/
+
+# Файлы баз данных
+*.sqlite3
+*.db
+db.sqlite3
+
+# Статические и медиа-файлы (которые генерируются или загружаются пользователями)
+# Если вы хотите отслеживать статику (например, CSS/JS), удалите /static/
+/static/
+/media/
+
+# Логи и временные файлы
+*.log
+*.pot
+*.pyc
+
+# Файлы IDE и редакторов
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Файлы операционной системы
+.DS_Store
+Thumbs.db
+
+# Файлы тестов и покрытия кода
+.pytest_cache/
+.coverage
+/htmlcov/
+
+# Секретные ключи и конфигурационные файлы
+# Всегда добавляйте файлы с чувствительными данными
+local_settings.py
+secret_key.txt
+*.env
+
+# Jupyter Notebook кэш
+.ipynb_checkpoints
