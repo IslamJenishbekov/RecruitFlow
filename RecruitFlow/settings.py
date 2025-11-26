@@ -10,10 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
+from urllib.parse import parse_qsl, urlparse
+import dj_database_url
+
+
 from dotenv import load_dotenv
-from urllib.parse import urlparse, parse_qsl
 
 load_dotenv()
 
@@ -25,13 +28,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0^k9lsawxfrzp^7)j%w+90%1a(+@m^#l)ggsak_d2!pxxcnl&@'
-
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-local-dev-key-change-me')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
-
+ALLOWED_HOSTS = ["*"]
+CSRF_TRUSTED_ORIGINS = ["https://*.fly.dev"]
 
 # Application definition
 
@@ -42,11 +44,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
     'main'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -82,17 +86,8 @@ WSGI_APPLICATION = 'RecruitFlow.wsgi.application'
 tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': tmpPostgres.path.replace('/', ''),
-        'USER': tmpPostgres.username,
-        'PASSWORD': tmpPostgres.password,
-        'HOST': tmpPostgres.hostname,
-        'PORT': 5432,
-        'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
-    }
+    'default': dj_database_url.parse(os.getenv("DATABASE_URL"))
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -166,24 +161,42 @@ USE_I18N = True
 
 USE_TZ = True
 
+MEDIA_URL = '/media/'
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
+# Физический путь на диске, где лежат файлы
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [
-    BASE_DIR / "static"
+    os.path.join(BASE_DIR, 'static'),
 ]
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+# 2. Папка, куда collectstatic соберет все файлы
+# ЭТА СТРОКА ТОЖЕ ДОЛЖНА БЫТЬ ВСЕГДА
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+# 3. Настройка хранилища (Whitenoise)
+# Если вы используете Django 4.2 или 5.0+:
+STORAGES = {
+    "default": {
+        # Если настроили Tigris/S3 - тут будет S3Storage, если нет - FileSystemStorage
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        # Для статики используем Whitenoise (самый надежный вариант для Fly)
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 AUTH_USER_MODEL = 'main.CustomUser'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# settings.py
 
-# Файл: myproject/settings.py (в конце файла)
+# 1. Куда перенаправлять пользователя после успешного ВХОДА
+# Здесь указываем name из urls.py (например, 'home' или 'profile')
+LOGIN_REDIRECT_URL = 'home'
 
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/accounts/login/'
-LOGIN_URL = '/accounts/login/'
+# 2. Куда перенаправлять пользователя после ВЫХОДА
+# Обычно отправляют на главную или снова на страницу логина
+LOGOUT_REDIRECT_URL = 'login'
 
+# 3. Куда перенаправлять анонима, если он пытается зайти на защищенную страницу (@login_required)
+LOGIN_URL = 'login'

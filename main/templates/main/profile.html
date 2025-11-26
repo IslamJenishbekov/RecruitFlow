@@ -1,1 +1,127 @@
 {% extends "base.html" %}
+
+{% block content %}
+<div class="py-4">
+    <h1 class="h2 mb-4">Личный кабинет</h1>
+
+    <div class="row">
+        <!-- ЛЕВАЯ КОЛОНКА (та же, что и была) -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-body text-center py-5">
+                    <div class="mb-3">
+                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px; font-size: 32px;">
+                            {{ user.username|slice:":1"|upper }}
+                        </div>
+                    </div>
+                    <h4 class="card-title mb-1">
+                        {% if user.first_name or user.last_name %}
+                            {{ user.first_name }} {{ user.last_name }}
+                        {% else %}
+                            {{ user.username }}
+                        {% endif %}
+                    </h4>
+                    <p class="text-muted mb-0">@{{ user.username }}</p>
+                    <!-- Теперь email берем динамически, он обновится после сохранения -->
+                    <p class="text-muted small">{{ user.email }}</p>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 h-100 bg-light">
+                        <div class="card-body text-center">
+                            <h2 class="display-6 fw-bold text-primary mb-0">{{ projects_count }}</h2>
+                            <small class="text-muted">Проектов</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 h-100 bg-light">
+                        <div class="card-body text-center">
+                            <h2 class="display-6 fw-bold text-success mb-0">{{ positions_count }}</h2>
+                            <small class="text-muted">Вакансий</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ПРАВАЯ КОЛОНКА: Форма настроек -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Настройки профиля</h5>
+                </div>
+                <div class="card-body">
+
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <!-- БЛОК 1: Контакты -->
+                        <div class="mb-5">
+                            <h6 class="text-muted text-uppercase small fw-bold mb-3">Контактные данные</h6>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Служебная почта</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-envelope"></i></span>
+                                    {{ form.email }}
+                                </div>
+                                <div class="form-text">На этот адрес могут приходить уведомления о системе.</div>
+                                {% if form.email.errors %}
+                                    <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- БЛОК 2: Интеграция -->
+                        <div class="mb-4">
+                            <h6 class="text-muted text-uppercase small fw-bold mb-3">Интеграция (Gmail Parsing)</h6>
+
+                            <div class="alert alert-info d-flex align-items-start p-3 mb-3" role="alert">
+                                <i class="bi bi-info-circle-fill fs-5 me-3 mt-1"></i>
+                                <div class="small">
+                                    <strong>Пароль приложения</strong> используется для чтения резюме из почты.
+                                    Если вы не меняли пароль в Google, оставьте это поле пустым.
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Gmail App Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
+                                    {{ form.gmail_password }}
+                                </div>
+                                {% if form.gmail_password.errors %}
+                                    <div class="text-danger small mt-1">{{ form.gmail_password.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-check-lg me-1"></i> Сохранить изменения
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+
+            <!-- Инструкция (вынесена под карточку для чистоты) -->
+            <div class="mt-4 px-2">
+                <p class="small text-muted mb-1 fw-bold">Как получить пароль приложения?</p>
+                <ol class="small text-muted ps-3">
+                    <li>Перейдите в <a href="https://myaccount.google.com/security" target="_blank" class="text-decoration-none">настройки безопасности Google</a>.</li>
+                    <li>Убедитесь, что включена "Двухэтапная аутентификация".</li>
+                    <li>Найдите раздел "Пароли приложений" (App Passwords).</li>
+                    <li>Создайте пароль для "Почта" и вставьте его в поле выше.</li>
+                </ol>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

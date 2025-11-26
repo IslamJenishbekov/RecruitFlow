@@ -1,1 +1,236 @@
 {% extends "base.html" %}
+
+{% block content %}
+<div class="py-4">
+
+    <!-- Хлебные крошки -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Проекты</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'project_detail' project.id %}">{{ project.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'position_detail' candidate.position.id %}">{{ candidate.position.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ candidate.full_name }}</li>
+        </ol>
+    </nav>
+
+    <!-- Шапка профиля -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div class="d-flex align-items-center">
+                <!-- Аватарка (буква имени) -->
+                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3 shadow-sm"
+                     style="width: 64px; height: 64px; font-size: 24px; font-weight: bold;">
+                    {{ candidate.full_name|slice:":1" }}
+                </div>
+                <div>
+                    <h1 class="h3 mb-1">{{ candidate.full_name }}</h1>
+                    <p class="text-muted mb-0">
+                        <i class="bi bi-briefcase me-1"></i>{{ candidate.position.name }}
+                        <span class="mx-2">|</span>
+                        <i class="bi bi-calendar3 me-1"></i>Добавлен: {{ candidate.created_at|date:"d.m.Y" }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Статус (Бейдж) -->
+            <div>
+                {% if candidate.status == 'new' %}
+                    <span class="badge bg-info text-dark fs-6 px-3 py-2">Новый</span>
+                {% elif candidate.status == 'interview_passed' %}
+                    <span class="badge bg-success fs-6 px-3 py-2">Интервью пройдено</span>
+                {% elif candidate.status == 'rejected' %}
+                    <span class="badge bg-secondary fs-6 px-3 py-2">Отказ</span>
+                {% else %}
+                    <span class="badge bg-light text-dark border fs-6 px-3 py-2">{{ candidate.get_status_display }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- ЛЕВАЯ КОЛОНКА: Данные резюме -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white fw-bold py-3">
+                    <i class="bi bi-person-lines-fill me-2 text-primary"></i>Информация из резюме
+                </div>
+                <div class="card-body">
+
+                    <!-- Контакты -->
+                    <div class="row mb-4 g-3">
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Телефон</small>
+                            <span>{{ candidate.phone_number|default:"-" }}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Email</small>
+                            {% if candidate.gmail %}
+                                <a href="mailto:{{ candidate.gmail }}">{{ candidate.gmail }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Telegram</small>
+                            {% if candidate.telegram %}
+                                <a href="https://t.me/{{ candidate.telegram|cut:'@' }}" target="_blank">{{ candidate.telegram }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Навыки и Опыт -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Технический стек</h6>
+                        <p>{{ candidate.used_technologies|default:"Не указан"|linebreaksbr }}</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Языки программирования</h6>
+                        <p>{{ candidate.programming_language|default:"-" }}</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Опыт работы</h6>
+                        <!-- Используем linebreaksbr, чтобы сохранить переносы строк из базы -->
+                        <p class="bg-light p-3 rounded">{{ candidate.experience|default:"Нет данных"|linebreaksbr }}</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Образование</h6>
+                            <p class="small">{{ candidate.education|default:"-"|linebreaksbr }}</p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Soft Skills</h6>
+                            <p class="small">{{ candidate.soft_skills|default:"-"|linebreaksbr }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Файл резюме -->
+                    <div class="mt-3 pt-3 border-top">
+                        <h6 class="fw-bold mb-3">Оригинал резюме</h6>
+                        {% if candidate.cv_file %}
+                            {% if candidate.cv_file.name|lower|slice:"-4:" == ".pdf" %}
+                                <!-- Если PDF - открываем в новой вкладке -->
+                                <a href="{{ candidate.cv_file.url }}" target="_blank" class="btn btn-outline-danger">
+                                    <i class="bi bi-file-earmark-pdf me-2"></i>Открыть PDF
+                                </a>
+                            {% else %}
+                                <!-- Если DOCX или другое - скачиваем -->
+                                <a href="{{ candidate.cv_file.url }}" download class="btn btn-outline-primary">
+                                    <i class="bi bi-download me-2"></i>Скачать файл
+                                </a>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted fst-italic">Файл не загружен</span>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ПРАВАЯ КОЛОНКА: Интервью и Транскрибация -->
+        <div class="col-lg-5 mb-4">
+
+            <!-- Блок загрузки / Прослушивания -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white fw-bold py-3">
+                    <i class="bi bi-mic-fill me-2 text-danger"></i>Запись собеседования
+                </div>
+                <div class="card-body text-center">
+
+                    {% if candidate.audio_file %}
+                        <!-- Плеер -->
+                        <audio controls class="w-100 mb-3">
+                            <source src="{{ candidate.audio_file.url }}" type="audio/mpeg">
+                            Ваш браузер не поддерживает аудио.
+                        </audio>
+                        <div class="alert alert-success py-2 small">
+                            <i class="bi bi-check-circle me-1"></i> Аудио загружено
+                        </div>
+                    {% else %}
+                        <div class="py-4 text-muted">
+                            <i class="bi bi-soundwave fs-1 d-block mb-2"></i>
+                            Запись еще не добавлена
+                        </div>
+                    {% endif %}
+
+                    <!-- Форма загрузки (Кнопка-триггер) -->
+                    <button class="btn btn-sm btn-outline-secondary mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#uploadAudioCollapse">
+                        {% if candidate.audio_file %}Заменить запись{% else %}Загрузить запись{% endif %}
+                    </button>
+
+                    <!-- Скрытая форма -->
+                    <div class="collapse mt-3" id="uploadAudioCollapse">
+                        <form method="post" enctype="multipart/form-data" class="card card-body bg-light border-0">
+                            {% csrf_token %}
+                            <div class="mb-2">
+                                {{ form.audio_file }}
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-upload me-1"></i> Отправить на расшифровку
+                            </button>
+                            <div class="form-text small text-muted">
+                                Загрузка и обработка может занять некоторое время.
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Блок Транскрибации (Скрытый по умолчанию) -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center pointer-cursor"
+                     data-bs-toggle="collapse" data-bs-target="#transcriptionCollapse" aria-expanded="false" style="cursor: pointer;">
+                    <span class="fw-bold"><i class="bi bi-file-text me-2 text-primary"></i>Транскрибация</span>
+
+                    <!-- Индикатор наличия текста -->
+                    {% if candidate.interview_transcription %}
+                        <i class="bi bi-chevron-down"></i>
+                    {% else %}
+                        <span class="badge bg-light text-muted">Нет данных</span>
+                    {% endif %}
+                </div>
+
+                <div class="collapse {% if not candidate.interview_transcription %}show{% endif %}" id="transcriptionCollapse">
+                    <div class="card-body">
+                        {% if candidate.interview_transcription %}
+                            <div class="bg-light p-3 rounded" style="max-height: 500px; overflow-y: auto; font-size: 0.95rem; line-height: 1.6;">
+                                {{ candidate.interview_transcription|linebreaksbr }}
+                            </div>
+                        {% else %}
+                            <div class="text-center text-muted py-4">
+                                <p class="mb-0">Текст появится здесь после загрузки и обработки аудио.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вопросы и ответы (Если есть) -->
+             {% if candidate.questions_answers %}
+            <div class="card shadow-sm border-0 mt-4">
+                <div class="card-header bg-white fw-bold py-3">
+                    <i class="bi bi-question-circle me-2 text-success"></i>Анализ ответов
+                </div>
+                <div class="card-body">
+                    <!-- Тут можно итерироваться по JSON -->
+                    {% for qa in candidate.questions_answers %}
+                        <div class="mb-3">
+                            <strong>В: {{ qa.question }}</strong>
+                            <p class="text-muted mb-0">{{ qa.answer }}</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}

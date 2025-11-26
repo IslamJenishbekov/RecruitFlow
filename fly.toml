@@ -1,0 +1,53 @@
+app = "recruitflow-uscaef"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  # Заменили 0.0.0.0 на [::]
+  app = "gunicorn RecruitFlow.wsgi:application --bind [::]:8000 --workers 1 --threads 4 --timeout 300"
+
+# --- НАСТРОЙКИ ЖЕЛЕЗА ---
+[vm]
+  memory = "2gb"      # Жестко задаем 2 ГБ RAM
+  cpu_kind = "shared" # Используем общий CPU (дешевле)
+  cpus = 1            # 1 vCPU
+
+[[services]]
+  processes = ["app"]
+  protocol = "tcp"
+  internal_port = 8000
+
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  # --- ВОТ ЭТО МЕНЯЕМ ---
+  # Убрали http_checks, поставили tcp_checks
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "30s" # Даем 30 сек на старт, просто проверяем порт
+    restart_limit = 0
+
+[env]
+  PORT = "8000"
+  TORCH_HOME = "/app/media/torch_cache"
+  XDG_CACHE_HOME = "/app/media/cache"
+
+[[mounts]]
+  source = "recruitflow_data"
+  destination = "/app/media"
+
+[swap]
+  size_mb = 1024 # Добавить 1 ГБ swap

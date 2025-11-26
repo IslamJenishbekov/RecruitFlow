@@ -1,1 +1,233 @@
 {% extends "base.html" %}
+
+{% block content %}
+    <div class="py-3">
+
+        <!-- Хлебные крошки -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'home' %}">Проекты</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'project_detail' project.id %}">{{ project.name }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ position.name }}</li>
+            </ol>
+        </nav>
+
+        <!-- Заголовок -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2">{{ position.name }}</h1>
+                <p class="text-muted mb-0">Список кандидатов и управление наймом</p>
+            </div>
+
+            <!-- Статистика -->
+            <div class="d-flex gap-3">
+            <span class="badge bg-light text-dark border p-2">
+                Всего: <strong>{{ candidates.count }}</strong>
+            </span>
+                <!-- Можно добавить счетчики New, Offer и т.д. -->
+            </div>
+        </div>
+
+        <!-- Таблица кандидатов -->
+        <div class="card shadow-sm border-0 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                    <tr>
+                        <th scope="col" class="ps-4" style="width: 40px;">
+                            <!-- Добавил position-relative и z-index: 2 -->
+                            <input type="checkbox" class="form-check-input position-relative" style="z-index: 2;"
+                                   id="selectAll">
+                        </th>
+                        <th scope="col">Кандидат</th>
+                        <th scope="col">Статус</th>
+                        <th scope="col">Контакты</th>
+                        <th scope="col">Стек / Опыт</th>
+                        <th scope="col">Дата</th>
+                        <th scope="col">Резюме</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% if candidates %}
+                        {% for candidate in candidates %}
+                            <!-- Вся строка кликабельна? Лучше сделать ссылку на имени, чтобы можно было выделять текст -->
+                            <tr>
+                                <td class="ps-4">
+                                    <input type="checkbox" class="form-check-input candidate-checkbox position-relative"
+                                           style="z-index: 2;" value="{{ candidate.id }}"></td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
+                                             style="width: 40px; height: 40px; font-weight: bold;">
+                                            {{ candidate.full_name|slice:":1" }}
+                                        </div>
+                                        <div>
+                                            <a href="{% url 'candidate_detail' candidate.id %}"
+                                               class="text-decoration-none fw-bold text-dark stretched-link">
+                                                {{ candidate.full_name }}
+                                            </a>
+                                            <!-- Небольшой предпросмотр должности или локации если есть -->
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <!-- Логика цветов для бейджей -->
+                                    {% if candidate.status == 'new' %}
+                                        <span class="badge bg-info text-dark">Новый</span>
+                                    {% elif candidate.status == 'screening' %}
+                                        <span class="badge bg-warning text-dark">Скрининг</span>
+                                    {% elif candidate.status == 'interview_scheduled' %}
+                                        <span class="badge bg-primary">Интервью</span>
+                                    {% elif candidate.status == 'offer' %}
+                                        <span class="badge bg-success">Оффер</span>
+                                    {% elif candidate.status == 'rejected' %}
+                                        <span class="badge bg-secondary">Отказ</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border">{{ candidate.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="small text-muted">
+                                        {% if candidate.phone_number %}
+                                            <div><i class="bi bi-telephone me-1"></i>{{ candidate.phone_number }}</div>
+                                        {% endif %}
+                                        {% if candidate.gmail %}
+                                            <div>
+                                                <i class="bi bi-envelope me-1"></i>{{ candidate.gmail|truncatechars:20 }}
+                                            </div>
+                                        {% endif %}
+                                        {% if candidate.telegram %}
+                                            <div><i class="bi bi-telegram me-1"></i>{{ candidate.telegram }}</div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <small class="d-block text-truncate" style="max-width: 200px;"
+                                           title="{{ candidate.used_technologies }}">
+                                        {{ candidate.used_technologies|default:"-" }}
+                                    </small>
+                                    <small class="text-muted">{{ candidate.experience_raw|truncatechars:30|default:"-" }}</small>
+                                </td>
+                                <td class="text-muted small">
+                                    {{ candidate.created_at|date:"d.m.Y" }}
+                                </td>
+                                <td>
+                                    {% if candidate.cv_file %}
+                                        <a href="{{ candidate.cv_file.url }}" target="_blank"
+                                           class="btn btn-sm btn-outline-secondary position-relative"
+                                           style="z-index: 2;">
+                                            <i class="bi bi-file-earmark-pdf"></i> PDF
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                Кандидатов пока нет. Загрузите вручную или дождитесь парсинга почты.
+                            </td>
+                        </tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- НИЖНЯЯ ПАНЕЛЬ ДЕЙСТВИЙ (Sticky Bottom) -->
+    <div class="fixed-bottom bg-white border-top py-3 shadow-lg" style="z-index: 100;">
+        <div class="container d-flex justify-content-between align-items-center">
+            <div class="text-muted small">
+                <i class="bi bi-check-square me-1"></i> Выбрано: <span id="selectedCount">0</span>
+            </div>
+            <div class="d-flex gap-2">
+                <!-- Кнопка добавления вручную -->
+                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
+                        data-bs-target="#addCandidateModal">
+                    <i class="bi bi-person-plus-fill me-2"></i>Добавить вручную
+                </button>
+
+                <!-- Кнопка планирования (пока заглушка) -->
+                <button type="button" class="btn btn-primary disabled" id="scheduleBtn">
+                    <i class="bi bi-calendar-event me-2"></i>Запланировать встречу
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: ДОБАВИТЬ КАНДИДАТА (Только файл) -->
+    <div class="modal fade" id="addCandidateModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title">Загрузить резюме</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-cloud-arrow-up fs-1 text-primary"></i>
+                            <p class="text-muted small mt-2">
+                                AI автоматически распознает данные кандидата из файла.
+                                <br>Поддерживаются: PDF, DOCX
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.cv_file }}
+                            {% if form.cv_file.errors %}
+                                <div class="text-danger small mt-1">{{ form.cv_file.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-magic me-2"></i>Распознать и добавить
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- СКРИПТ ДЛЯ ЧЕКБОКСОВ -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.candidate-checkbox');
+            const countSpan = document.getElementById('selectedCount');
+            const scheduleBtn = document.getElementById('scheduleBtn');
+
+            function updateCounter() {
+                const checked = document.querySelectorAll('.candidate-checkbox:checked');
+                const count = checked.length;
+                countSpan.textContent = count;
+
+                if (count > 0) {
+                    scheduleBtn.classList.remove('disabled');
+                } else {
+                    scheduleBtn.classList.add('disabled');
+                }
+            }
+
+            selectAll.addEventListener('change', function () {
+                checkboxes.forEach(cb => cb.checked = selectAll.checked);
+                updateCounter();
+            });
+
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', updateCounter);
+            });
+        });
+    </script>
+
+    <!-- Отступ снизу, чтобы футер не перекрывал контент -->
+    <div style="height: 80px;"></div>
+
+{% endblock %}

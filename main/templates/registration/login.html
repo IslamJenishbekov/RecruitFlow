@@ -1,52 +1,60 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Вход — RecruitFlow{% endblock %}
 
 {% block content %}
-<div class="auth-wrapper">
+<!-- Обертка с градиентным фоном -->
+<div class="auth-page-bg">
     <div class="auth-card">
-        <h2>Вход в систему</h2>
+
+        <div class="auth-header">
+            <!-- Можно добавить логотип или иконку -->
+            <div style="font-size: 40px; color: var(--primary-color); margin-bottom: 10px;">
+                <i class="bi bi-person-circle"></i>
+            </div>
+            <h2>С возвращением!</h2>
+            <p>Введите свои данные для входа в RecruitFlow</p>
+        </div>
 
         <form method="post">
             {% csrf_token %}
 
-            {# Блок для глобальных ошибок (например, "Неверный логин или пароль") #}
+            {# Глобальные ошибки #}
             {% if form.non_field_errors %}
-                <div class="errorlist" style="margin-bottom: 20px; background-color: #ffebee; padding: 10px; border-radius: 6px; border: 1px solid #ffcdd2;">
+                <div class="errorlist">
                     {% for error in form.non_field_errors %}
-                        <div style="color: #c62828;">{{ error }}</div>
+                        <div><i class="bi bi-exclamation-circle-fill me-1"></i> {{ error }}</div>
                     {% endfor %}
                 </div>
             {% endif %}
 
-            {# Цикл по полям формы (обычно Username и Password) #}
             {% for field in form %}
                 <div class="form-group">
                     {{ field.label_tag }}
                     {{ field }}
-                    
-                    {# Ошибки конкретного поля #}
+
                     {% if field.errors %}
-                        <div class="errorlist">
+                        <div style="color: #dc2626; font-size: 13px; margin-top: 5px;">
                             {% for error in field.errors %}
-                                <div>• {{ error }}</div>
+                                <div>{{ error }}</div>
                             {% endfor %}
                         </div>
                     {% endif %}
                 </div>
             {% endfor %}
 
-            <button type="submit" class="btn-primary">Войти</button>
-            
-            {# Скрытое поле, чтобы перенаправить пользователя туда, куда он хотел попасть до входа #}
+            <button type="submit" class="btn-auth">
+                Войти <i class="bi bi-arrow-right-short"></i>
+            </button>
+
             <input type="hidden" name="next" value="{{ next }}">
         </form>
 
         <div class="auth-footer">
-            <p>Нет аккаунта? <a href="{% url 'signup' %}">Зарегистрироваться</a></p>
-            
-            {# Если вы подключили стандартные URL Django для сброса пароля #}
-            {# <p style="margin-top: 10px;"><a href="{% url 'password_reset' %}" style="font-size: 13px; color: #95a5a6;">Забыли пароль?</a></p> #}
+            <p class="mb-2">Нет аккаунта? <a href="{% url 'signup' %}">Создать бесплатно</a></p>
+            {# Ссылка на сброс пароля, если понадобится #}
+            {# <a href="#" style="font-size: 13px; color: #9ca3af;">Забыли пароль?</a> #}
         </div>
     </div>
 </div>

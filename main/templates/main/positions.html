@@ -1,1 +1,177 @@
 {% extends "base.html" %}
+
+{% block content %}
+<div class="py-3">
+
+    <!-- Навигация -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Проекты</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ project.name }}</li>
+        </ol>
+    </nav>
+
+    <!-- Заголовок -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2">{{ project.name }}</h1>
+            <p class="text-muted">Управление вакансиями и требованиями</p>
+        </div>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPositionModal">
+            <i class="bi bi-plus-lg"></i> Добавить вакансию
+        </button>
+    </div>
+
+    <!-- Список вакансий -->
+    <div class="row">
+        {% if positions %}
+            {% for position in positions %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 shadow-sm hover-shadow border-start border-4 border-primary">
+
+                    <div class="card-body d-flex flex-column">
+                        <!-- Шапка с меню -->
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title text-truncate pe-2" title="{{ position.name }}">
+                                {{ position.name }}
+                            </h5>
+
+                            <!-- ДРОПДАУН МЕНЮ -->
+                            <div class="dropdown">
+                                <button class="btn btn-link text-secondary p-0" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <!-- КНОПКА ИМПОРТА -->
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#importLinkModal-{{ position.id }}">
+                                            <i class="bi bi-link-45deg me-2"></i>Импорт из ссылки
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <!-- КНОПКА УДАЛЕНИЯ -->
+                                    <li>
+                                        <button class="dropdown-item text-danger" type="button" data-bs-toggle="modal" data-bs-target="#deletePosModal-{{ position.id }}">
+                                            <i class="bi bi-trash me-2"></i>Удалить
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Информация -->
+                        <p class="card-text text-muted small mb-3 flex-grow-1">
+                            {% if position.requirements %}
+                                {{ position.requirements|truncatechars:80 }}
+                            {% else %}
+                                <em>Требования не указаны</em>
+                            {% endif %}
+                        </p>
+
+                        <!-- Статистика -->
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-people-fill me-1"></i> Кандидатов: {{ position.candidates_count }}
+                            </span>
+                            <a href="{% url 'position_detail' position.id %}" class="btn btn-sm btn-primary">
+                                К кандидатам &rarr;
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- МОДАЛКА: ИМПОРТ ИЗ ССЫЛКИ -->
+            <div class="modal fade" id="importLinkModal-{{ position.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form action="{% url 'import_requirements_from_url' position.id %}" method="post">
+                            {% csrf_token %}
+                            <div class="modal-header">
+                                <h5 class="modal-title">Импорт требований</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Ссылка на вакансию (HH, LinkedIn, Habr)</label>
+                                    <input type="url" name="target_url" class="form-control" placeholder="https://..." required>
+                                    <div class="form-text text-warning">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Внимание: Текущие требования к вакансии будут <strong>полностью перезаписаны</strong> текстом со страницы.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="submit" class="btn btn-primary">Загрузить</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- МОДАЛКА: УДАЛЕНИЕ -->
+            <div class="modal fade" id="deletePosModal-{{ position.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Удаление вакансии</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            Вы уверены, что хотите удалить вакансию <strong>{{ position.name }}</strong>?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <form action="{% url 'delete_position' position.id %}" method="post">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger">Удалить</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <!-- Заглушка -->
+            <div class="col-12">
+                <div class="alert alert-secondary text-center py-5">
+                    <i class="bi bi-briefcase fs-1 text-muted mb-3 d-block"></i>
+                    <h4>В этом проекте пока нет вакансий</h4>
+                    <p>Создайте позицию, чтобы начать поиск кандидатов.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- МОДАЛКА: СОЗДАНИЕ ВАКАНСИИ (Остается без изменений) -->
+<div class="modal fade" id="createPositionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Новая вакансия</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Название вакансии</label>
+                        {{ form.name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Требования и описание</label>
+                        {{ form.requirements }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

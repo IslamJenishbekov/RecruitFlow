@@ -77,14 +77,14 @@ class Candidate(models.Model):
 
     # Данные из резюме
     programming_language = models.CharField(max_length=100, verbose_name="Язык программирования", blank=True)
-    experience = models.CharField(max_length=50, verbose_name="Опыт (лет)", blank=True)  # "3 года", "5 лет"
-    experience_raw = models.TextField(verbose_name="Опыт (сырой текст)", blank=True)  # Место работы и описание
+    experience = models.CharField(max_length=500, verbose_name="Опыт (лет)", blank=True)  # "3 года", "5 лет"
     used_technologies = models.TextField(verbose_name="Стек технологий", blank=True)
     education = models.TextField(verbose_name="Образование", blank=True)
     soft_skills = models.TextField(verbose_name="Soft Skills", blank=True)
     languages = models.CharField(max_length=255, verbose_name="Владение языками", blank=True)
 
     # Контакты
+    phone_number = models.CharField(verbose_name="Phone Number", null=True)
     gmail = models.EmailField(verbose_name="Email", blank=True, null=True)
     telegram = models.CharField(max_length=100, verbose_name="Telegram", blank=True)
 
