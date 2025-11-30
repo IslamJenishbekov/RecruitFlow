@@ -16,4 +16,7 @@ urlpatterns = [
     path('positions/<int:position_id>/delete/', views.delete_position, name='delete_position'),
     path('positions/<int:position_id>/import_url/', views.import_requirements_from_url,
          name='import_requirements_from_url'),
+    path('schedule-mass/', views.schedule_interviews, name='schedule_interviews'),
+    path('google-auth/start/', views.start_google_auth, name='start_google_auth'),
+    path('oauth2callback/', views.google_auth_callback, name='google_auth_callback'),
 ]

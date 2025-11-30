@@ -1,4 +1,12 @@
 # main/services/llm_service.py
+"""
+Сервис для работы с Google Gemini API.
+
+Предоставляет функциональность для:
+- Классификации писем (резюме/не резюме)
+- Извлечения структурированных данных из резюме
+- Оценки релевантности кандидатов для вакансий
+"""
 import logging
 import os
 
@@ -15,10 +23,28 @@ load_dotenv()
 
 
 class GeminiService:
+    """
+    Сервис для работы с Google Gemini API (Singleton паттерн).
+    
+    Использует Google Gemini 2.0 Flash для анализа текста, классификации
+    и извлечения структурированных данных из резюме кандидатов.
+    
+    Attributes:
+        _instance: Единственный экземпляр сервиса (Singleton)
+        _initialized: Флаг инициализации
+        model: Название используемой модели Gemini
+        client: Клиент Google Gemini API
+    """
     _instance = None
     _initialized = False
 
     def __new__(cls, *args, **kwargs):
+        """
+        Создает единственный экземпляр сервиса (Singleton паттерн).
+        
+        Returns:
+            GeminiService: Единственный экземпляр сервиса
+        """
         if not cls._instance:
             logger.info("Создание единственного экземпляра GeminiService...")
             cls._instance = super(GeminiService, cls).__new__(cls)
@@ -30,6 +56,15 @@ class GeminiService:
             self,
             model_name: str = "gemini-2.0-flash"
     ):
+        """
+        Инициализирует сервис Gemini.
+        
+        Args:
+            model_name: Название модели Gemini (по умолчанию "gemini-2.0-flash")
+            
+        Raises:
+            ValueError: Если GOOGLE_API_KEY не найден в переменных окружения
+        """
         if GeminiService._initialized:
             return
 
@@ -48,7 +83,20 @@ class GeminiService:
     def is_resume(self, title: str, content: str, file_content: str) -> bool:
         """
         Определяет, является ли письмо резюме, используя LLM и Pydantic схему.
-        Возвращает True, если это резюме (1), и False, если нет (0).
+        
+        Анализирует тему письма, тело письма и содержимое вложений,
+        чтобы определить, содержит ли письмо резюме кандидата.
+        
+        Args:
+            title: Тема письма
+            content: Текст письма
+            file_content: Извлеченный текст из вложений (первые 10000 символов)
+            
+        Returns:
+            bool: True, если письмо содержит резюме, False в противном случае
+            
+        Note:
+            В случае ошибки API или валидации возвращает False
         """
 
         # Формируем промпт из всех источников данных
@@ -103,8 +151,24 @@ class GeminiService:
     def get_candidate_info_from_resume(self, title: str, content: str, file_content: str) -> dict:
         """
         Извлекает структурированные данные кандидата из текста резюме и письма.
-        Возвращает словарь (dict), соответствующий схеме CandidateInfoFromResume.
-        В случае ошибки возвращает пустой словарь.
+        
+        Парсит резюме и извлекает следующую информацию:
+        - ФИО, контакты (email, телефон, Telegram)
+        - Опыт работы, навыки, стек технологий
+        - Образование, языки, soft skills
+        
+        Args:
+            title: Тема письма (используется как дополнительный контекст)
+            content: Текст письма (вторичный источник)
+            file_content: Основной текст резюме из вложений (первые 20000 символов)
+            
+        Returns:
+            dict: Словарь с данными кандидата согласно схеме CandidateInfoFromResume.
+                  В случае ошибки возвращает пустой словарь.
+                  
+        Note:
+            Приоритет отдается содержимому файла резюме, текст письма используется
+            как дополнительный контекст.
         """
 
         # Формируем промпт. Важно дать приоритет файлу (резюме), а тело письма использовать как дополнение.
@@ -163,9 +227,22 @@ class GeminiService:
     def is_candidate_relevant_for_position(self, candidate_info: str, position_requirements: str) -> bool:
         """
         Оценивает, подходит ли кандидат под требования вакансии.
-        :param candidate_info: Строка или JSON с данными кандидата (навыки, опыт и т.д.)
-        :param position_requirements: Текст требований вакансии
-        :return: True, если кандидат релевантен, иначе False.
+        
+        Сравнивает профиль кандидата с требованиями позиции, анализируя:
+        - Совпадение технических навыков
+        - Уровень опыта
+        - Релевантность фона
+        
+        Args:
+            candidate_info: Строка или JSON с данными кандидата (навыки, опыт и т.д.)
+            position_requirements: Текст требований вакансии
+            
+        Returns:
+            bool: True, если кандидат релевантен для позиции, False в противном случае.
+                  Если требования пусты, возвращает True (кандидат считается подходящим).
+                  
+        Note:
+            Если требования к вакансии пусты, кандидат автоматически считается релевантным.
         """
 
         # Если требований нет, считаем, что кандидат подходит (или наоборот, зависит от бизнес-логики)
@@ -219,3 +296,81 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Ошибка Gemini при проверке релевантности: {e}")
             return False
+
+    def extract_salary_from_transcription(self, transcription: str) -> str:
+        """
+        Извлекает ожидаемую зарплату из транскрипции интервью.
+        
+        Анализирует текст транскрипции интервью и извлекает информацию
+        о зарплате, которую упомянул кандидат во время собеседования.
+        
+        Args:
+            transcription: Полный текст транскрипции интервью
+            
+        Returns:
+            str: Ожидаемая зарплата в текстовом формате (например, "150000-200000 рублей").
+                 Пустая строка, если зарплата не упоминалась или не была найдена.
+                 
+        Example:
+            "150000-200000 рублей" или "$5000-7000" или "от 200к"
+            
+        Note:
+            В случае ошибки API или валидации возвращает пустую строку.
+        """
+        if not transcription or not transcription.strip():
+            logger.warning("Транскрипция пуста, невозможно извлечь зарплату.")
+            return ""
+
+        user_prompt = f"""
+        Analyze the following interview transcription and extract the expected salary 
+        mentioned by the candidate during the interview.
+
+        INTERVIEW TRANSCRIPTION:
+        {transcription[:15000]}  # Ограничиваем длину для экономии токенов
+
+        INSTRUCTIONS:
+        1. Look for any mentions of salary, compensation, or expected payment
+        2. Extract the exact amount, range, or conditions mentioned
+        3. Include currency if mentioned (рубли, dollars, USD, etc.)
+        4. If salary was not discussed, return empty string
+        5. Preserve the format as mentioned (e.g., "150-200 тысяч", "$5000-7000")
+        """
+
+        system_instruction = (
+            "You are an expert HR assistant extracting salary information from interview transcripts. "
+            "Your task is to identify and extract the exact salary expectations mentioned by the candidate. "
+            "Be precise with numbers, ranges, and currency. If no salary was discussed, return empty string."
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=ExpectedSalaryFromInterview,
+                    temperature=0.3  # Низкая температура для более точного извлечения
+                )
+            )
+
+            if response.parsed:
+                result: ExpectedSalaryFromInterview = response.parsed
+                salary = result.expected_salary.strip()
+                
+                if salary:
+                    logger.info(f"Извлечена зарплата из транскрипции: {salary}")
+                else:
+                    logger.info("Зарплата не найдена в транскрипции.")
+                
+                return salary
+
+            logger.warning("LLM вернула пустой ответ при извлечении зарплаты.")
+            return ""
+
+        except ValidationError as e:
+            logger.error(f"Ошибка валидации при извлечении зарплаты: {e}")
+            return ""
+        except Exception as e:
+            logger.error(f"Ошибка Gemini при извлечении зарплаты: {e}")
+            return ""

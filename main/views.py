@@ -1,23 +1,74 @@
 # main/views.py
+"""
+Django views для приложения RecruitFlow.
 
+Содержит представления для:
+- Аутентификации и регистрации
+- Управления проектами и вакансиями
+- Работы с кандидатами
+- Настройки профиля и интеграций
+- OAuth авторизации для Google Calendar
+"""
+import datetime
 import logging
-
-from django.contrib import messages  # Для всплывающих сообщений
+import os
+from functools import wraps
+from google_auth_oauthlib.flow import Flow
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-
+from django.conf import settings
+from .services.zoom_service import ZoomService
+from .services.calendar_service import GoogleCalendarService
+from django.http import HttpResponseBadRequest
 from .forms import *
 from .models import *
 from .services import llm_service, mail_service, parsing_servise, audio_processing
 from .repository import candidate
+REDIRECT_URI = 'http://127.0.0.1:8000/oauth2callback'
 
 logger = logging.getLogger(__name__)
 parser_service = parsing_servise.ParsingService()
 
+
+def restrict_test_user(view_func):
+    """
+    Декоратор для ограничения действий тестовых пользователей.
+    
+    Блокирует выполнение действия, если логин пользователя начинается с "test_user".
+    Показывает сообщение с просьбой войти со своего аккаунта.
+    
+    Args:
+        view_func: Функция представления для обертки
+        
+    Returns:
+        Обернутая функция с проверкой тестового пользователя
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if request.user.username.startswith('test_user'):
+            messages.warning(
+                request,
+                'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
+            )
+            # Редиректим на предыдущую страницу или главную
+            return redirect(request.META.get('HTTP_REFERER', 'home'))
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
 def signup(request):
+    """
+    Представление для регистрации нового пользователя.
+    
+    GET: Отображает форму регистрации
+    POST: Обрабатывает форму и создает нового пользователя
+    
+    Returns:
+        HttpResponse: Страница регистрации или редирект на страницу входа
+    """
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
@@ -38,6 +89,14 @@ def projects(request):
     2. Обработка формы создания нового проекта.
     """
     if request.method == 'POST':
+        # Проверка для тестовых пользователей
+        if request.user.username.startswith('test_user'):
+            messages.warning(
+                request,
+                'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
+            )
+            return redirect('home')
+            
         form = ProjectForm(request.POST)
         if form.is_valid():
             # Создаем проект, но пока не сохраняем в БД окончательно,
@@ -68,53 +127,81 @@ def projects(request):
 
 @login_required
 def profile(request):
+    """
+    Представление для страницы профиля пользователя.
+    
+    Отображает статистику (количество проектов и вакансий) и форму
+    для настройки интеграций (Gmail, Zoom, Google Calendar).
+    
+    GET: Отображает форму с текущими настройками
+    POST: Сохраняет обновленные настройки профиля
+    
+    Returns:
+        HttpResponse: Страница профиля с формой настроек
+    """
     user = request.user
 
-    # Статистика
-    projects_count = user.projects.count()
-    positions_count = Position.objects.filter(project__users=user).count()
+    # Сбор статистики для левой колонки
+    # (Предполагаем, что related_name в модели ProjectUser настроен или фильтруем напрямую)
+    projects_count = Project.objects.filter(projectuser__user=user).count()
 
-    # Обработка формы
+    # Считаем количество вакансий во всех проектах пользователя
+    positions_count = Position.objects.filter(project__projectuser__user=user).count()
+
     if request.method == 'POST':
-        form = ProfileSettingsForm(request.POST, instance=user)
+        # Важно: request.FILES обязателен для загрузки файлов
+        form = ProfileSettingsForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
-            # Логика сохранения:
-            # Если поле пароля пустое, Django ModelForm по умолчанию не трогает его,
-            # если оно не было изменено. Но так как мы используем виджет PasswordInput
-            # и render_value=False (по умолчанию), поле приходит пустым.
-
-            # Нюанс: если юзер оставил поле пароля пустым, мы не хотим затирать старый пароль пустым значением.
-            # ModelForm обычно справляется, но для надежности проверим:
-
-            if not form.cleaned_data.get('gmail_password'):
-                # Если пароль не введен, исключаем его из обновления
-                user.email = form.cleaned_data['email']
-                user.save()
-            else:
-                # Если введен, сохраняем всё
-                form.save()
-
-            messages.success(request, 'Настройки профиля обновлены.')
+            form.save()
+            messages.success(request, 'Настройки профиля успешно обновлены!')
             return redirect('profile')
+        else:
+            messages.error(request, 'Пожалуйста, исправьте ошибки в форме.')
     else:
         form = ProfileSettingsForm(instance=user)
 
     context = {
+        'form': form,
         'user': user,
         'projects_count': projects_count,
         'positions_count': positions_count,
-        'form': form
     }
     return render(request, 'main/profile.html', context)
 
 
 @login_required
 def project_detail(request, project_id):
+    """
+    Представление для детальной страницы проекта.
+    
+    Отображает список вакансий в проекте с количеством кандидатов
+    и форму для создания новой вакансии.
+    
+    Args:
+        project_id: ID проекта
+        
+    GET: Отображает список вакансий и форму создания
+    POST: Создает новую вакансию в проекте
+    
+    Returns:
+        HttpResponse: Страница проекта с вакансиями
+        
+    Raises:
+        Http404: Если проект не найден или пользователь не имеет доступа
+    """
     # 1. Получаем проект, проверяя доступ (user входит в project.users)
     project = get_object_or_404(Project, id=project_id, users=request.user)
 
     # 2. Обработка создания новой позиции
     if request.method == 'POST':
+        # Проверка для тестовых пользователей
+        if request.user.username.startswith('test_user'):
+            messages.warning(
+                request,
+                'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
+            )
+            return redirect('project_detail', project_id=project.id)
+            
         form = PositionForm(request.POST)
         if form.is_valid():
             position = form.save(commit=False)
@@ -139,7 +226,20 @@ def project_detail(request, project_id):
 
 @login_required
 @require_POST
+@restrict_test_user
 def delete_position(request, position_id):
+    """
+    Удаляет вакансию из проекта.
+    
+    Args:
+        position_id: ID вакансии для удаления
+        
+    Returns:
+        HttpResponse: Редирект на страницу проекта
+        
+    Raises:
+        Http404: Если вакансия не найдена или пользователь не имеет доступа
+    """
     # Ищем позицию, но также проверяем, что юзер имеет доступ к проекту этой позиции
     position = get_object_or_404(Position, id=position_id, project__users=request.user)
     project_id = position.project.id
@@ -153,9 +253,35 @@ def delete_position(request, position_id):
 
 @login_required
 def position_detail(request, position_id):
+    """
+    Представление для детальной страницы вакансии.
+    
+    Отображает список кандидатов на вакансию и форму для
+    загрузки резюме нового кандидата.
+    
+    Args:
+        position_id: ID вакансии
+        
+    GET: Отображает список кандидатов и форму загрузки
+    POST: Создает нового кандидата из загруженного файла резюме
+    
+    Returns:
+        HttpResponse: Страница вакансии с кандидатами
+        
+    Raises:
+        Http404: Если вакансия не найдена или пользователь не имеет доступа
+    """
     position = get_object_or_404(Position, id=position_id, project__users=request.user)
 
     if request.method == 'POST':
+        # Проверка для тестовых пользователей
+        if request.user.username.startswith('test_user'):
+            messages.warning(
+                request,
+                'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
+            )
+            return redirect('position_detail', position_id=position.id)
+            
         form = CandidateUploadForm(request.POST, request.FILES)
         if form.is_valid():
             uploaded_file = request.FILES['cv_file']
@@ -178,6 +304,32 @@ def position_detail(request, position_id):
 
 @login_required
 def candidate_detail(request, candidate_id):
+    """
+    Представление для детальной страницы кандидата.
+    
+    Отображает полную информацию о кандидате, резюме, транскрипции
+    и форму для загрузки аудиозаписи интервью.
+    
+    Args:
+        candidate_id: ID кандидата
+        
+    GET: Отображает информацию о кандидате и форму загрузки аудио
+    POST: Обрабатывает загруженное аудио, выполняет транскрибацию
+          и обновляет статус кандидата
+    
+    Process:
+        При загрузке аудио:
+        1. Сохраняет файл
+        2. Выполняет транскрибацию через audio_processing
+        3. Сохраняет транскрипцию в БД
+        4. Обновляет статус на 'interview_passed'
+    
+    Returns:
+        HttpResponse: Страница кандидата
+        
+    Raises:
+        Http404: Если кандидат не найден или пользователь не имеет доступа
+    """
     # 1. Получаем кандидата с проверкой прав (через позицию и проект)
     candidate = get_object_or_404(
         Candidate,
@@ -187,6 +339,14 @@ def candidate_detail(request, candidate_id):
 
     # 2. Обработка загрузки аудио
     if request.method == 'POST':
+        # Проверка для тестовых пользователей
+        if request.user.username.startswith('test_user'):
+            messages.warning(
+                request,
+                'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
+            )
+            return redirect('candidate_detail', candidate_id=candidate.id)
+            
         form = CandidateAudioForm(request.POST, request.FILES, instance=candidate)
         if form.is_valid():
             # Сначала сохраняем файл физически
@@ -198,16 +358,26 @@ def candidate_detail(request, candidate_id):
                 if candidate.audio_file:
                     file_path = candidate.audio_file.path
 
-                    # Вызываем ваш сервис
+                    # Вызываем сервис транскрибации
                     transcription_text = audio_processing.get_transcription(file_path)
 
-                    # Сохраняем результат
+                    # Сохраняем транскрипцию
                     candidate.interview_transcription = transcription_text
+                    
+                    # Извлекаем зарплату из транскрипции через LLM
+                    if transcription_text:
+                        llm_service_instance = llm_service.GeminiService()
+                        extracted_salary = llm_service_instance.extract_salary_from_transcription(transcription_text)
+                        if extracted_salary:
+                            candidate.waited_salary = extracted_salary
+                            logger.info(f"Извлечена зарплата для кандидата {candidate.id}: {extracted_salary}")
+                    
                     candidate.status = 'interview_passed'  # Можно авто-менять статус
                     candidate.save()
 
                     messages.success(request, "Аудио загружено и успешно расшифровано!")
             except Exception as e:
+                logger.error(f"Ошибка при транскрибации: {e}")
                 messages.error(request, f"Ошибка при транскрибации: {e}")
 
             # PRG Pattern
@@ -223,8 +393,24 @@ def candidate_detail(request, candidate_id):
     return render(request, 'main/candidate_detail.html', context)
 
 @login_required
-@require_POST  # Разрешаем только POST запросы (безопасность)
+@require_POST
+@restrict_test_user
 def delete_project(request, project_id):
+    """
+    Удаляет проект.
+    
+    Args:
+        project_id: ID проекта для удаления
+        
+    Returns:
+        HttpResponse: Редирект на главную страницу
+        
+    Raises:
+        Http404: Если проект не найден или пользователь не имеет доступа
+        
+    Note:
+        При удалении проекта каскадно удаляются все связанные вакансии и кандидаты.
+    """
     # Ищем проект, который принадлежит текущему пользователю
     project = get_object_or_404(Project, id=project_id, users=request.user)
 
@@ -240,7 +426,25 @@ def delete_project(request, project_id):
 
 @login_required
 @require_POST
+@restrict_test_user
 def add_user_to_project(request, project_id):
+    """
+    Добавляет пользователя в проект.
+    
+    Args:
+        project_id: ID проекта
+        username: Имя пользователя из POST данных
+        
+    Returns:
+        HttpResponse: Редирект на главную страницу
+        
+    Raises:
+        Http404: Если проект не найден или пользователь не имеет доступа
+        
+    Note:
+        Показывает предупреждение, если пользователь уже в проекте.
+        Показывает ошибку, если пользователь не найден.
+    """
     project = get_object_or_404(Project, id=project_id, users=request.user)
     username = request.POST.get('username')
     User = get_user_model()
@@ -262,7 +466,28 @@ def add_user_to_project(request, project_id):
 
 @login_required
 @require_POST
+@restrict_test_user
 def import_requirements_from_url(request, position_id):
+    """
+    Импортирует требования к вакансии с внешнего сайта.
+    
+    Парсит описание вакансии с указанного URL и сохраняет
+    в поле requirements позиции.
+    
+    Args:
+        position_id: ID вакансии
+        target_url: URL страницы вакансии из POST данных
+        
+    Supported sites:
+        - devkg.com
+        - hh.ru (HeadHunter)
+        
+    Returns:
+        HttpResponse: Редирект на страницу проекта
+        
+    Raises:
+        Http404: Если вакансия не найдена или пользователь не имеет доступа
+    """
     position = get_object_or_404(Position, id=position_id, project__users=request.user)
 
     url = request.POST.get('target_url')
@@ -280,3 +505,251 @@ def import_requirements_from_url(request, position_id):
     messages.success(request, f"Требования успешно импортированы с сайта.")
 
     return redirect('project_detail', project_id=position.project.id)
+
+
+@login_required
+@require_POST
+@restrict_test_user
+def schedule_interviews(request):
+    """
+    Массовое планирование интервью для выбранных кандидатов.
+    
+    Для каждого выбранного кандидата:
+    1. Ищет свободный слот в Google Calendar
+    2. Создает Zoom встречу
+    3. Создает событие в Google Calendar с приглашением кандидата
+    4. Обновляет статус кандидата на 'interview_scheduled'
+    
+    Args:
+        candidate_ids: Список ID кандидатов из POST данных
+        
+    Requirements:
+        - Настроен Google Calendar (google_credentials)
+        - Настроен Zoom (zoom_account_id, zoom_client_id, zoom_client_secret)
+        
+    Returns:
+        HttpResponse: Редирект на предыдущую страницу
+        
+    Note:
+        Ищет свободные слоты в течение 2 недель вперед.
+        Показывает количество успешно запланированных интервью и ошибки.
+    """
+    candidate_ids = request.POST.getlist('candidate_ids')
+    user = request.user
+
+    if not candidate_ids:
+        messages.warning(request, "Не выбрано ни одного кандидата.")
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    # 1. Проверка Google
+    if not user.google_credentials:
+        messages.error(request, "Ошибка: Не подключен Google Calendar. Загрузите credentials в профиле.")
+        return redirect('profile')
+
+        # 2. Проверка Zoom (Теперь проверяем поля модели)
+    if not all([user.zoom_account_id, user.zoom_client_id, user.zoom_client_secret]):
+        messages.error(request, "Ошибка: Не настроен Zoom. Введите ключи API в профиле.")
+        return redirect('profile')
+
+    # 3. Инициализация сервисов
+    try:
+        # Берем настройки Zoom из пользователя!
+        zoom_service = ZoomService(
+            account_id=user.zoom_account_id,
+            client_id=user.zoom_client_id,
+            client_secret=user.zoom_client_secret
+        )
+
+        google_service = GoogleCalendarService(user.google_credentials)
+
+    except Exception as e:
+        logger.error(f"Service Init Error: {e}")
+        messages.error(request, f"Ошибка авторизации в сервисах: {e}")
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    # ... Дальше логика поиска слотов и создания встреч остается прежней ...
+    success_count = 0
+    errors = []
+
+    current_search_date = datetime.date.today() + datetime.timedelta(days=1)
+    available_slots_cache = []
+
+    for c_id in candidate_ids:
+        try:
+            candidate = Candidate.objects.get(id=c_id, position__project__users=user)
+
+            if not candidate.gmail:
+                errors.append(f"{candidate.full_name}: нет Email")
+                continue
+
+            if candidate.status == 'interview_scheduled':
+                errors.append(f"{candidate.full_name}: уже назначено")
+                continue
+
+            # Поиск слотов (Google)
+            attempts = 0
+            while not available_slots_cache and attempts < 14:
+                available_slots_cache = google_service.get_free_slots(current_search_date)
+                if not available_slots_cache:
+                    current_search_date += datetime.timedelta(days=1)
+                    attempts += 1
+
+            if not available_slots_cache:
+                errors.append(f"{candidate.full_name}: Нет слотов (2 недели)")
+                continue
+
+            best_slot = available_slots_cache.pop(0)
+
+            # Создание Zoom (Zoom)
+            zoom_link = zoom_service.create_meeting(
+                topic=f"Interview: {candidate.full_name}",
+                start_time_iso=best_slot.strftime('%Y-%m-%dT%H:%M:%S'),
+                duration_minutes=45
+            )
+
+            # Создание Календаря (Google)
+            google_service.create_event(
+                summary=f"Interview: {candidate.full_name}",
+                description=f"Candidate: {candidate.full_name}\nPosition: {candidate.position.name}",
+                start_dt=best_slot,
+                duration_minutes=45,
+                candidate_email=candidate.gmail,
+                zoom_link=zoom_link
+            )
+
+            candidate.status = 'interview_scheduled'
+            candidate.scheduled_at = best_slot
+            if not candidate.questions_answers: candidate.questions_answers = {}
+            candidate.questions_answers['zoom_link'] = zoom_link
+            candidate.save()
+
+            success_count += 1
+
+        except Candidate.DoesNotExist:
+            continue
+        except Exception as e:
+            logger.error(f"Error processing {c_id}: {e}")
+            errors.append(f"{candidate.full_name}: {str(e)}")
+
+    if success_count > 0:
+        messages.success(request, f"Запланировано: {success_count}")
+    if errors:
+        messages.warning(request, f"Ошибки: {'; '.join(errors[:3])}")
+
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+
+@login_required
+def start_google_auth(request):
+    """
+    Начинает процесс OAuth2 авторизации для Google Calendar.
+    
+    Шаг 1: Создает OAuth Flow с загруженными credentials пользователя
+    и перенаправляет на страницу авторизации Google.
+    
+    Requirements:
+        - Пользователь должен загрузить credentials.json в профиле
+        
+    Returns:
+        HttpResponse: Редирект на страницу авторизации Google
+        
+    Raises:
+        Redirect: На страницу профиля с ошибкой, если credentials не загружены
+    """
+    user = request.user
+
+    # Проверяем, загрузил ли пользователь файл с настройками (тот самый credentials.json)
+    if not user.google_credentials:
+        messages.error(request, "Сначала загрузите файл credentials.json и нажмите Сохранить.")
+        return redirect('profile')
+
+    try:
+        # Мы временно сохраняем конфиг в словарь, чтобы Flow мог его прочитать
+        # Важно: Google JSON обычно имеет структуру {"web": {...}} или {"installed": {...}}
+        client_config = user.google_credentials
+
+        # Создаем OAuth Flow
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=['https://www.googleapis.com/auth/calendar.events'],
+            redirect_uri=REDIRECT_URI
+        )
+
+        # Генерируем ссылку авторизации
+        auth_url, _ = flow.authorization_url(prompt='consent')
+
+        # Сохраняем состояние во временной сессии (не обязательно для MVP, но полезно)
+        request.session['google_auth_state'] = 'in_progress'
+
+        return redirect(auth_url)
+
+    except Exception as e:
+        logger.error(f"Google Auth Error: {e}")
+        messages.error(request,
+                       f"Ошибка конфигурации Google: {e}. Убедитесь, что загрузили правильный JSON (OAuth Client ID).")
+        return redirect('profile')
+
+
+@login_required
+def google_auth_callback(request):
+    """
+    Обрабатывает callback от Google OAuth2 авторизации.
+    
+    Шаг 2: Получает authorization code из URL, обменивает его на токены
+    и сохраняет обновленные credentials в профиле пользователя.
+    
+    Args:
+        code: Authorization code из GET параметров
+        
+    Returns:
+        HttpResponse: Редирект на страницу профиля с сообщением об успехе
+        
+    Raises:
+        HttpResponseBadRequest: Если код авторизации отсутствует
+        Redirect: На страницу профиля с ошибкой при проблемах авторизации
+        
+    Note:
+        Сохраняет refresh_token для автоматического обновления access token.
+    """
+    if 'code' not in request.GET:
+        return HttpResponseBadRequest("Отсутствует код авторизации.")
+
+    user = request.user
+
+    try:
+        # Снова инициализируем Flow с тем же конфигом
+        client_config = user.google_credentials
+
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=['https://www.googleapis.com/auth/calendar.events'],
+            redirect_uri=REDIRECT_URI
+        )
+
+        # Меняем код из URL на реальные токены
+        flow.fetch_token(code=request.GET.get('code'))
+
+        # Получаем итоговые credentials (с refresh_token!)
+        credentials = flow.credentials
+
+        # Формируем JSON, который уже пригоден для Authorized User
+        creds_data = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        }
+
+        # Сохраняем ЭТОТ JSON в базу. Теперь он "Authorized"
+        user.google_credentials = creds_data
+        user.save()
+
+        messages.success(request, "Google Календарь успешно подключен!")
+        return redirect('profile')
+
+    except Exception as e:
+        logger.error(f"Auth Callback Error: {e}")
+        messages.error(request, f"Ошибка при подключении: {e}")
+        return redirect('profile')

@@ -1,21 +1,64 @@
 # Файл: main/models.py
+"""
+Модели данных для приложения RecruitFlow.
 
+Содержит модели для:
+- Пользователей с настройками интеграций
+- Проектов и вакансий
+- Кандидатов с резюме и транскрипциями
+"""
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
-# 1. Пользователь
 class CustomUser(AbstractUser):
+    """
+    Расширенная модель пользователя с настройками интеграций.
+    
+    Наследуется от AbstractUser и добавляет поля для:
+    - Gmail App Password (для мониторинга почты)
+    - Google OAuth credentials (для Calendar API)
+    - Zoom API credentials (для создания встреч)
+    
+    Attributes:
+        gmail_password: Пароль приложения Gmail для IMAP доступа
+        google_credentials: JSON с OAuth2 токенами для Google Calendar
+        zoom_account_id: Zoom Account ID
+        zoom_client_id: Zoom OAuth Client ID
+        zoom_client_secret: Zoom OAuth Client Secret
+        
+    Note:
+        Хранение паролей в открытом виде небезопасно для production.
+        В будущих версиях рекомендуется использовать шифрование.
+    """
     # Хранить пароль в открытом виде небезопасно, но для MVP и App Password допустимо.
     # В будущем лучше использовать шифрование.
     gmail_password = models.CharField(max_length=255, null=True, blank=True)
-
+    google_credentials = models.JSONField(null=True, blank=True)
+    zoom_account_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Zoom Account ID")
+    zoom_client_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Zoom Client ID")
+    zoom_client_secret = models.CharField(max_length=255, null=True, blank=True, verbose_name="Zoom Client Secret")
     def __str__(self):
         return self.username
 
 
-# 2. Проекты
 class Project(models.Model):
+    """
+    Модель проекта/команды.
+    
+    Проект объединяет вакансии и участников (пользователей).
+    Один пользователь может быть в нескольких проектах.
+    
+    Attributes:
+        name: Название проекта
+        created_at: Дата создания
+        updated_at: Дата последнего обновления
+        users: Связь ManyToMany с пользователями через ProjectUser
+        
+    Relations:
+        - positions: Вакансии в рамках проекта (ForeignKey)
+        - users: Участники проекта (ManyToMany через ProjectUser)
+    """
     name = models.CharField(max_length=200, verbose_name="Название проекта")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
@@ -31,8 +74,22 @@ class Project(models.Model):
         verbose_name_plural = "Проекты"
 
 
-# 3. Связь Юзер-Проект (ProjectsUsers)
 class ProjectUser(models.Model):
+    """
+    Промежуточная модель для связи пользователей и проектов.
+    
+    Позволяет хранить дополнительную информацию о связи
+    пользователя с проектом (даты присоединения и т.д.).
+    
+    Attributes:
+        project: Связь с проектом (ForeignKey)
+        user: Связь с пользователем (ForeignKey)
+        created_at: Дата присоединения к проекту
+        updated_at: Дата последнего обновления связи
+        
+    Constraints:
+        unique_together: Один пользователь не может быть дважды в одном проекте
+    """
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -44,8 +101,23 @@ class ProjectUser(models.Model):
         verbose_name_plural = "Участники проектов"
 
 
-# 4. Позиции (Вакансии)
 class Position(models.Model):
+    """
+    Модель вакансии/позиции.
+    
+    Представляет открытую вакансию в рамках проекта.
+    Содержит требования к кандидату и связана с кандидатами.
+    
+    Attributes:
+        project: Проект, к которому относится вакансия (ForeignKey)
+        name: Название вакансии
+        requirements: Текст требований к кандидату
+        created_at: Дата создания
+        updated_at: Дата последнего обновления
+        
+    Relations:
+        - candidates: Кандидаты на эту позицию (ForeignKey)
+    """
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='positions', verbose_name="Проект")
     name = models.CharField(max_length=200, verbose_name="Название вакансии")
     requirements = models.TextField(verbose_name="Требования", blank=True)
@@ -60,8 +132,54 @@ class Position(models.Model):
         verbose_name_plural = "Позиции"
 
 
-# 5. Кандидаты
 class Candidate(models.Model):
+    """
+    Модель кандидата.
+    
+    Хранит полную информацию о кандидате: данные из резюме,
+    контакты, статус в процессе найма, файлы и транскрипции.
+    
+    Attributes:
+        position: Вакансия, на которую претендует кандидат (ForeignKey)
+        full_name: ФИО кандидата
+        
+        # Данные из резюме
+        programming_language: Языки программирования
+        experience: Опыт работы (текстовое описание)
+        used_technologies: Стек технологий
+        education: Образование
+        soft_skills: Soft skills
+        languages: Владение языками
+        
+        # Контакты
+        phone_number: Номер телефона
+        gmail: Email адрес
+        telegram: Telegram username
+        
+        # HR информация
+        waited_salary: Ожидаемая зарплата
+        status: Текущий статус в процессе найма
+        scheduled_at: Время запланированного интервью
+        
+        # Файлы
+        cv_file: Файл резюме (PDF/DOCX)
+        audio_file: Аудиозапись интервью
+        
+        # Результаты
+        interview_transcription: Текст транскрипции интервью
+        questions_answers: JSON с вопросами и ответами
+        
+        created_at: Дата создания записи
+        updated_at: Дата последнего обновления
+        
+    Status Choices:
+        - 'new': Новый кандидат
+        - 'screening': Скрининг пройден
+        - 'interview_scheduled': Интервью назначено
+        - 'interview_passed': Интервью пройдено
+        - 'offer': Оффер
+        - 'rejected': Отказ
+    """
     # Статусы кандидата
     STATUS_CHOICES = [
         ('new', 'Новый'),

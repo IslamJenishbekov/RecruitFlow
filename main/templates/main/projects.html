@@ -6,9 +6,15 @@
     <!-- Заголовок и Кнопка создания -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h2">Мои проекты</h1>
+        {% if not user.username|slice:":9" == "test_user" %}
         <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#createProjectModal">
             <i class="bi bi-plus-lg"></i> Создать проект
         </button>
+        {% else %}
+        <div class="alert alert-warning mb-0 py-2 px-3">
+            <small>Чтобы создать свой проект, вам надо зайти со своего аккаунта.</small>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Список проектов -->
@@ -36,6 +42,7 @@
                                     <i class="bi bi-three-dots-vertical fs-5"></i>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
+                                    {% if not user.username|slice:":9" == "test_user" %}
                                     <!-- Пункт: Добавить участника -->
                                     <li>
                                         <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#addUserModal-{{ project.id }}">
@@ -49,6 +56,13 @@
                                             <i class="bi bi-trash me-2"></i>Удалить проект
                                         </button>
                                     </li>
+                                    {% else %}
+                                    <li>
+                                        <span class="dropdown-item-text text-muted small">
+                                            <i class="bi bi-info-circle me-2"></i>Чтобы создать свой проект, вам надо зайти со своего аккаунта.
+                                        </span>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </div>

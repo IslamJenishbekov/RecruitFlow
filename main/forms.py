@@ -1,20 +1,58 @@
+"""
+Django формы для приложения RecruitFlow.
+
+Содержит формы для:
+- Регистрации и редактирования пользователей
+- Создания проектов и вакансий
+- Настройки профиля с интеграциями
+- Загрузки резюме и аудио
+"""
 from django import forms
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
-
+import json
+from django.contrib.auth import get_user_model
 from .models import *
+
+User = get_user_model()
 
 
 class CustomUserCreationForm(UserCreationForm):
+    """
+    Форма для регистрации нового пользователя.
+    
+    Расширяет стандартную форму UserCreationForm для работы
+    с моделью CustomUser.
+    
+    Fields:
+        username: Имя пользователя
+        email: Email адрес
+    """
     class Meta(UserCreationForm.Meta):
         model = CustomUser
         fields = ('username', 'email') # Укажите поля, которые будут на форме регистрации
 
 class CustomUserChangeForm(UserChangeForm):
+    """
+    Форма для редактирования пользователя в админке.
+    
+    Fields:
+        username: Имя пользователя
+        email: Email адрес
+    """
     class Meta:
         model = CustomUser
-        fields = ('username', 'email') # Поля, которые можно редактировать в админке
+        fields = ('username', 'email')
 
 class ProjectForm(forms.ModelForm):
+    """
+    Форма для создания нового проекта.
+    
+    Fields:
+        name: Название проекта
+        
+    Widgets:
+        name: TextInput с классом 'form-control' и placeholder
+    """
     class Meta:
         model = Project
         fields = ['name']
@@ -27,6 +65,17 @@ class ProjectForm(forms.ModelForm):
 
 
 class PositionForm(forms.ModelForm):
+    """
+    Форма для создания новой вакансии/позиции.
+    
+    Fields:
+        name: Название вакансии
+        requirements: Требования к кандидату
+        
+    Widgets:
+        name: TextInput с классом 'form-control' и placeholder
+        requirements: Textarea с 5 строками и placeholder
+    """
     class Meta:
         model = Position
         fields = ['name', 'requirements']
@@ -42,35 +91,109 @@ class PositionForm(forms.ModelForm):
             }),
         }
 
+
 class ProfileSettingsForm(forms.ModelForm):
+    """
+    Форма для настройки профиля пользователя с интеграциями.
+    
+    Позволяет настроить:
+    - Email и Gmail App Password
+    - Zoom API credentials
+    - Google OAuth credentials (через загрузку JSON файла)
+    
+    Fields:
+        email: Служебная почта
+        gmail_password: Gmail App Password для IMAP
+        zoom_account_id: Zoom Account ID
+        zoom_client_id: Zoom Client ID
+        zoom_client_secret: Zoom Client Secret
+        credentials_file: JSON файл с Google OAuth credentials
+        
+    Note:
+        credentials_file - виртуальное поле, не сохраняется в БД,
+        а парсится и сохраняется в google_credentials как JSON.
+    """
+    # Поле для файла Google Credentials (виртуальное)
+    credentials_file = forms.FileField(
+        required=False,
+        label="Файл credentials.json",
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.json'
+        })
+    )
+
     class Meta:
         model = CustomUser
-        fields = ['email', 'gmail_password'] # Добавили email
+        # Добавляем поля зума в список
+        fields = ['email', 'gmail_password', 'zoom_account_id', 'zoom_client_id', 'zoom_client_secret']
+
         widgets = {
-            'email': forms.EmailInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'name@company.com'
-            }),
-            'gmail_password': forms.PasswordInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Введите новый пароль (если хотите изменить)',
-                'autocomplete': 'new-password'
-            })
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'gmail_password': forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+
+            # Zoom Widgets
+            'zoom_account_id': forms.TextInput(
+                attrs={'class': 'form-control', 'placeholder': 'Например: abc123XYZ...'}),
+            'zoom_client_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'zoom_client_secret': forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
         }
         labels = {
             'email': 'Служебная почта',
-            'gmail_password': 'Gmail App Password'
+            'gmail_password': 'Gmail App Password',
+            'zoom_account_id': 'Zoom Account ID',
+            'zoom_client_id': 'Zoom Client ID',
+            'zoom_client_secret': 'Zoom Client Secret',
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Делаем поле email обязательным (в AbstractUser оно может быть blank=True)
-        self.fields['email'].required = True
-        # Делаем поле пароля необязательным, чтобы можно было сохранить email, не меняя пароль
-        self.fields['gmail_password'].required = False
+    def clean_credentials_file(self):
+        """
+        Валидирует загруженный JSON файл с Google credentials.
+        
+        Returns:
+            dict: Распарсенный JSON из файла
+            
+        Raises:
+            ValidationError: Если файл не является валидным JSON
+        """
+        file = self.cleaned_data.get('credentials_file')
+        if file:
+            try:
+                data = json.load(file)
+                return data
+            except json.JSONDecodeError:
+                raise forms.ValidationError("Ошибка чтения файла. Убедитесь, что это корректный JSON.")
+        return None
 
+    def save(self, commit=True):
+        """
+        Сохраняет форму и обновляет google_credentials из файла.
+        
+        Args:
+            commit: Если True, сохраняет объект в БД
+            
+        Returns:
+            CustomUser: Сохраненный объект пользователя
+        """
+        user = super().save(commit=False)
+        json_data = self.cleaned_data.get('credentials_file')
+        if json_data:
+            user.google_credentials = json_data
+
+        if commit:
+            user.save()
+        return user
 
 class CandidateUploadForm(forms.Form):
+    """
+    Форма для загрузки файла резюме кандидата.
+    
+    Fields:
+        cv_file: Файл резюме (PDF или DOCX)
+        
+    Validation:
+        Принимает только файлы с расширениями .pdf и .docx
+    """
     cv_file = forms.FileField(
         label="Файл резюме",
         widget=forms.FileInput(attrs={
@@ -80,6 +203,15 @@ class CandidateUploadForm(forms.Form):
     )
 
 class CandidateAudioForm(forms.ModelForm):
+    """
+    Форма для загрузки аудиозаписи интервью кандидата.
+    
+    Fields:
+        audio_file: Аудиофайл с записью интервью
+        
+    Validation:
+        Принимает только аудиофайлы (audio/*)
+    """
     class Meta:
         model = Candidate
         fields = ['audio_file']

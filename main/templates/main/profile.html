@@ -1,127 +1,255 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="py-4">
-    <h1 class="h2 mb-4">Личный кабинет</h1>
+    <div class="container py-4">
+        <h1 class="h2 mb-4">Личный кабинет</h1>
 
-    <div class="row">
-        <!-- ЛЕВАЯ КОЛОНКА (та же, что и была) -->
-        <div class="col-lg-4 mb-4">
-            <div class="card shadow-sm mb-4 border-0">
-                <div class="card-body text-center py-5">
-                    <div class="mb-3">
-                        <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px; font-size: 32px;">
-                            {{ user.username|slice:":1"|upper }}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="row">
+            <!-- ЛЕВАЯ КОЛОНКА: Инфо о пользователе -->
+            <div class="col-lg-4 mb-4">
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-body text-center py-5">
+                        <div class="mb-3">
+                            <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center"
+                                 style="width: 80px; height: 80px; font-size: 32px;">
+                                {{ user.username|slice:":1"|upper }}
+                            </div>
+                        </div>
+                        <h4 class="card-title mb-1">
+                            {% if user.first_name or user.last_name %}
+                                {{ user.first_name }} {{ user.last_name }}
+                            {% else %}
+                                {{ user.username }}
+                            {% endif %}
+                        </h4>
+                        <p class="text-muted mb-0">@{{ user.username }}</p>
+                        <p class="text-muted small">{{ user.email }}</p>
+                    </div>
+                </div>
+
+                <!-- Статистика -->
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="card shadow-sm border-0 h-100 bg-light">
+                            <div class="card-body text-center">
+                                <h2 class="display-6 fw-bold text-primary mb-0">{{ projects_count }}</h2>
+                                <small class="text-muted">Проектов</small>
+                            </div>
                         </div>
                     </div>
-                    <h4 class="card-title mb-1">
-                        {% if user.first_name or user.last_name %}
-                            {{ user.first_name }} {{ user.last_name }}
-                        {% else %}
-                            {{ user.username }}
-                        {% endif %}
-                    </h4>
-                    <p class="text-muted mb-0">@{{ user.username }}</p>
-                    <!-- Теперь email берем динамически, он обновится после сохранения -->
-                    <p class="text-muted small">{{ user.email }}</p>
+                    <div class="col-6">
+                        <div class="card shadow-sm border-0 h-100 bg-light">
+                            <div class="card-body text-center">
+                                <h2 class="display-6 fw-bold text-success mb-0">{{ positions_count }}</h2>
+                                <small class="text-muted">Вакансий</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="row g-3">
-                <div class="col-6">
-                    <div class="card shadow-sm border-0 h-100 bg-light">
-                        <div class="card-body text-center">
-                            <h2 class="display-6 fw-bold text-primary mb-0">{{ projects_count }}</h2>
-                            <small class="text-muted">Проектов</small>
-                        </div>
+            <!-- ПРАВАЯ КОЛОНКА: Форма настроек -->
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Настройки интеграций</h5>
                     </div>
-                </div>
-                <div class="col-6">
-                    <div class="card shadow-sm border-0 h-100 bg-light">
-                        <div class="card-body text-center">
-                            <h2 class="display-6 fw-bold text-success mb-0">{{ positions_count }}</h2>
-                            <small class="text-muted">Вакансий</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                    <div class="card-body">
 
-        <!-- ПРАВАЯ КОЛОНКА: Форма настроек -->
-        <div class="col-lg-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white py-3">
-                    <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Настройки профиля</h5>
-                </div>
-                <div class="card-body">
+                        <!-- ЕДИНАЯ ФОРМА ДЛЯ ВСЕХ ПОЛЕЙ -->
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
 
-                    <form method="post">
-                        {% csrf_token %}
-
-                        <!-- БЛОК 1: Контакты -->
-                        <div class="mb-5">
-                            <h6 class="text-muted text-uppercase small fw-bold mb-3">Контактные данные</h6>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Служебная почта</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-envelope"></i></span>
-                                    {{ form.email }}
+                            <!-- 1. Контакты -->
+                            <div class="mb-5">
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Основная информация</h6>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Служебная почта</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="bi bi-envelope"></i></span>
+                                        {{ form.email }}
+                                    </div>
+                                    <div class="form-text">Используется для уведомлений и как логин для SMTP.</div>
+                                    {% if form.email.errors %}
+                                        <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                                    {% endif %}
                                 </div>
-                                <div class="form-text">На этот адрес могут приходить уведомления о системе.</div>
-                                {% if form.email.errors %}
-                                    <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                            </div>
+
+                            <!-- 2. Gmail Integration -->
+                            <div class="mb-5">
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Gmail (Чтение резюме)</h6>
+
+                                <div class="alert alert-light border d-flex align-items-start p-3 mb-3">
+                                    <i class="bi bi-info-circle-fill text-primary fs-5 me-3 mt-1"></i>
+                                    <div class="small text-muted">
+                                        Для автоматического чтения резюме из почты требуется <strong>Пароль
+                                        приложения</strong>.
+                                        Обычный пароль от аккаунта Google не подойдет, если включена двухфакторная
+                                        аутентификация.
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Gmail App Password</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
+                                        {{ form.gmail_password }}
+                                    </div>
+                                    {% if form.gmail_password.errors %}
+                                        <div class="text-danger small mt-1">{{ form.gmail_password.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- 3. Google Calendar Integration -->
+                            <!-- 3. Google Calendar Integration -->
+                            <div class="mb-5">
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Google Calendar
+                                    (Планирование)</h6>
+
+                                <!-- ЛОГИКА ОТОБРАЖЕНИЯ СТАТУСА -->
+                                {% if user.google_credentials and user.google_credentials.refresh_token %}
+                                    <!-- Если есть refresh_token — значит всё работает -->
+                                    <div class="alert alert-success d-flex align-items-center p-2 mb-3">
+                                        <i class="bi bi-check-circle-fill fs-5 me-2"></i>
+                                        <div><strong>Подключено и работает.</strong> Система может создавать встречи.
+                                        </div>
+                                    </div>
+
+                                {% elif user.google_credentials %}
+                                    <!-- Файл загружен, но авторизация не пройдена -->
+                                    <div class="alert alert-warning p-3 mb-3">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="bi bi-exclamation-circle-fill fs-5 me-2"></i>
+                                            <strong>Требуется авторизация</strong>
+                                        </div>
+                                        <p class="small mb-2">Файл настроек загружен. Теперь нужно разрешить доступ к
+                                            календарю.</p>
+                                        <a href="{% url 'start_google_auth' %}" class="btn btn-sm btn-outline-dark">
+                                            <i class="bi bi-google me-1"></i> Разрешить доступ
+                                        </a>
+                                    </div>
+
+                                {% else %}
+                                    <!-- Ничего не загружено -->
+                                    <div class="alert alert-secondary d-flex align-items-center p-2 mb-3">
+                                        <i class="bi bi-x-circle fs-5 me-2"></i>
+                                        <div>Credentials отсутствуют. Загрузите файл ниже.</div>
+                                    </div>
                                 {% endif %}
-                            </div>
-                        </div>
 
-                        <!-- БЛОК 2: Интеграция -->
-                        <div class="mb-4">
-                            <h6 class="text-muted text-uppercase small fw-bold mb-3">Интеграция (Gmail Parsing)</h6>
-
-                            <div class="alert alert-info d-flex align-items-start p-3 mb-3" role="alert">
-                                <i class="bi bi-info-circle-fill fs-5 me-3 mt-1"></i>
-                                <div class="small">
-                                    <strong>Пароль приложения</strong> используется для чтения резюме из почты.
-                                    Если вы не меняли пароль в Google, оставьте это поле пустым.
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Обновить credentials.json</label>
+                                    {{ form.credentials_file }}
+                                    <div class="form-text text-muted">
+                                        Если вы загрузите новый файл, потребуется повторная авторизация.
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Gmail App Password</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
-                                    {{ form.gmail_password }}
-                                </div>
-                                {% if form.gmail_password.errors %}
-                                    <div class="text-danger small mt-1">{{ form.gmail_password.errors }}</div>
+                            <!-- 4. Zoom Integration -->
+                            <div class="mb-4">
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Zoom (Server-to-Server
+                                    OAuth)</h6>
+
+                                {% if user.zoom_account_id and user.zoom_client_id %}
+                                    <div class="alert alert-success d-flex align-items-center p-2 mb-3">
+                                        <i class="bi bi-camera-video-fill fs-5 me-2"></i>
+                                        <div><strong>Zoom подключен.</strong> Ссылки на встречи будут создаваться от
+                                            вашего имени.
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-light border d-flex align-items-start p-3 mb-3">
+                                        <i class="bi bi-info-circle-fill text-primary fs-5 me-3 mt-1"></i>
+                                        <div class="small text-muted">
+                                            Создайте приложение типа "Server-to-Server OAuth" в <a
+                                                href="https://marketplace.zoom.us/" target="_blank">Zoom Marketplace</a>,
+                                            чтобы получить ключи.
+                                        </div>
+                                    </div>
                                 {% endif %}
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Account ID</label>
+                                    {{ form.zoom_account_id }}
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Client ID</label>
+                                        {{ form.zoom_client_id }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Client Secret</label>
+                                        {{ form.zoom_client_secret }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="bi bi-check-lg me-1"></i> Сохранить изменения
+                                </button>
+                            </div>
+                        </form>
+                        <!-- КОНЕЦ ФОРМЫ -->
+
+                    </div>
+                </div>
+
+                <!-- Блок инструкций -->
+                <div class="row mt-4">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-0 bg-white shadow-sm">
+                            <div class="card-body">
+                                <h6 class="card-title fw-bold text-primary"><i class="bi bi-envelope me-2"></i>Gmail
+                                </h6>
+                                <p class="small text-muted mb-0">Security -> 2FA -> App Passwords.</p>
                             </div>
                         </div>
+                    </div>
 
-                        <hr>
-
-                        <div class="d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary px-4">
-                                <i class="bi bi-check-lg me-1"></i> Сохранить изменения
-                            </button>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-0 bg-white shadow-sm">
+                            <div class="card-body">
+                                <h6 class="card-title fw-bold text-success"><i class="bi bi-calendar-event me-2"></i>Calendar
+                                </h6>
+                                <p class="small text-muted mb-0">Google Cloud -> APIs -> OAuth Client ID -> Download
+                                    JSON.</p>
+                            </div>
                         </div>
-                    </form>
+                    </div>
 
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-0 bg-white shadow-sm">
+                            <div class="card-body">
+                                <h6 class="card-title fw-bold text-info"><i class="bi bi-camera-video me-2"></i>Zoom
+                                </h6>
+                                <ol class="small text-muted ps-3 mb-0">
+                                    <li><a href="https://marketplace.zoom.us/" target="_blank">Zoom Marketplace</a> ->
+                                        Develop -> Build App.
+                                    </li>
+                                    <li>Выберите <strong>Server-to-Server OAuth</strong>.</li>
+                                    <li>Скопируйте Account ID, Client ID и Secret.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Инструкция (вынесена под карточку для чистоты) -->
-            <div class="mt-4 px-2">
-                <p class="small text-muted mb-1 fw-bold">Как получить пароль приложения?</p>
-                <ol class="small text-muted ps-3">
-                    <li>Перейдите в <a href="https://myaccount.google.com/security" target="_blank" class="text-decoration-none">настройки безопасности Google</a>.</li>
-                    <li>Убедитесь, что включена "Двухэтапная аутентификация".</li>
-                    <li>Найдите раздел "Пароли приложений" (App Passwords).</li>
-                    <li>Создайте пароль для "Почта" и вставьте его в поле выше.</li>
-                </ol>
             </div>
-
         </div>
     </div>
-</div>
 {% endblock %}

@@ -110,6 +110,20 @@
                         </div>
                     </div>
 
+                    <hr>
+
+                    <!-- Зарплата -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="fw-bold">Ожидаемая ЗП (из интервью)</h6>
+                            {% if candidate.waited_salary %}
+                                <p class="small text-success fw-semibold">{{ candidate.waited_salary }}</p>
+                            {% else %}
+                                <p class="small text-muted">Не упоминалась в интервью</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
                     <!-- Файл резюме -->
                     <div class="mt-3 pt-3 border-top">
                         <h6 class="fw-bold mb-3">Оригинал резюме</h6>
@@ -160,6 +174,7 @@
                         </div>
                     {% endif %}
 
+                    {% if not user.username|slice:":9" == "test_user" %}
                     <!-- Форма загрузки (Кнопка-триггер) -->
                     <button class="btn btn-sm btn-outline-secondary mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#uploadAudioCollapse">
                         {% if candidate.audio_file %}Заменить запись{% else %}Загрузить запись{% endif %}
@@ -180,6 +195,11 @@
                             </div>
                         </form>
                     </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-3 py-2">
+                        <small>Чтобы создать свой проект, вам надо зайти со своего аккаунта.</small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
