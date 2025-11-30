@@ -232,24 +232,6 @@
                 </div>
             </div>
 
-            <!-- Вопросы и ответы (Если есть) -->
-             {% if candidate.questions_answers %}
-            <div class="card shadow-sm border-0 mt-4">
-                <div class="card-header bg-white fw-bold py-3">
-                    <i class="bi bi-question-circle me-2 text-success"></i>Анализ ответов
-                </div>
-                <div class="card-body">
-                    <!-- Тут можно итерироваться по JSON -->
-                    {% for qa in candidate.questions_answers %}
-                        <div class="mb-3">
-                            <strong>В: {{ qa.question }}</strong>
-                            <p class="text-muted mb-0">{{ qa.answer }}</p>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-
         </div>
     </div>
 </div>

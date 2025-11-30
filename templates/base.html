@@ -63,7 +63,7 @@
             <!-- Блок для сообщений (messages) от Django, если будут ошибки или успехи -->
             {% if messages %}
                 {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert" id="message-{{ forloop.counter }}">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -82,8 +82,8 @@
                 <p class="mb-0 text-muted">&copy; {% now "Y" %} RecruitFlow. Все права защищены.</p>
             </div>
             <div class="footer-contacts">
-                <a href="mailto:contact@recruitflow.com" class="text-decoration-none me-3 text-muted">contact@recruitflow.com</a>
-                <a href="https://t.me/your_telegram" target="_blank" class="text-decoration-none text-muted">Telegram</a>
+                <a href="mailto:islam.akmatov2004@recruitflow.com" class="text-decoration-none me-3 text-muted">contact@recruitflow.com</a>
+                <a href="https://t.me/jenishbekov77" target="_blank" class="text-decoration-none text-muted">Telegram</a>
             </div>
         </div>
     </footer>
