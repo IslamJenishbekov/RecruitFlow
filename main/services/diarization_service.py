@@ -28,7 +28,8 @@ class DiarizationService:
         pipeline: Загруженный pipeline pyannote для диаризации
     """
     _instance = None  # Атрибут класса для хранения единственного экземпляра
-
+    _initialized = False
+    
     def __new__(cls, *args, **kwargs):
         """
         Создает единственный экземпляр сервиса (Singleton паттерн).
@@ -54,6 +55,9 @@ class DiarizationService:
             ValueError: Если HUGGING_FACE_TOKEN не найден в переменных окружения
             Exception: При ошибках загрузки модели или проблемах с доступом к HuggingFace
         """
+        if DiarizationService._initialized:
+            return
+
         from pyannote.audio import Pipeline
         logger.info("Начинаем инициализацию DiarizationService")
 
@@ -69,6 +73,7 @@ class DiarizationService:
             if self.pipeline is None:
                 logger.error("Не удалось загрузить Pipeline (вернулся None). Проверьте права доступа на HuggingFace.")
             else:
+                DiarizationService._initialized = True
                 logger.info("Diarization service started SUCCESS")
 
         except Exception as e:

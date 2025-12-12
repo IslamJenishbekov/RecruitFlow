@@ -50,4 +50,4 @@ primary_region = "fra"
   destination = "/app/media"
 
 [swap]
-  size_mb = 1024 # Добавить 1 ГБ swap
+  size_mb = 4096 # Добавить 1 ГБ swap

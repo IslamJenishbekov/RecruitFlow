@@ -38,6 +38,9 @@ class CustomUser(AbstractUser):
     zoom_account_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Zoom Account ID")
     zoom_client_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Zoom Client ID")
     zoom_client_secret = models.CharField(max_length=255, null=True, blank=True, verbose_name="Zoom Client Secret")
+    telegram_bot_token = models.CharField(max_length=255, null=True, blank=True, verbose_name="Telegram Bot Token")
+    telegram_bot_link = models.URLField(max_length=255, null=True, blank=True, verbose_name="Ссылка на Telegram бота")
+
     def __str__(self):
         return self.username
 
@@ -219,6 +222,7 @@ class Candidate(models.Model):
     interview_transcription = models.TextField(verbose_name="Транскрибация", blank=True)
     # Используем JSONField для вопросов-ответов, так как у вас Postgres
     questions_answers = models.JSONField(verbose_name="Вопросы и ответы", null=True, blank=True)
+    telegram_short_interview = models.TextField(verbose_name="Текст телеграм интервью", blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -229,3 +233,124 @@ class Candidate(models.Model):
     class Meta:
         verbose_name = "Кандидат"
         verbose_name_plural = "Кандидаты"
+
+
+class BotInterviewSession(models.Model):
+    """
+    Модель сессии интервью в Telegram.
+    Настройки определяют, как именно бот (AI) будет вести диалог.
+    """
+
+    # --- Варианты выбора ---
+    MODE_CHOICES = [
+        ('screening', 'HR Скрининг (базовый)'),
+        ('hard_skills', 'Техническое интервью (Hard Skills)'),
+        ('soft_skills', 'Поведенческое интервью (Soft Skills)'),
+        ('mixed', 'Смешанное'),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', 'Активна'),
+        ('completed', 'Завершена'),
+        ('cancelled', 'Отменена'),
+    ]
+
+    # --- Основные поля ---
+    telegram_username = models.CharField(max_length=255, verbose_name="Telegram Username")
+    candidate = models.ForeignKey(
+        Candidate,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='bot_sessions',
+        verbose_name="Связанный кандидат"
+    )
+
+    # --- Параметры интервью ---
+    interview_mode = models.CharField(
+        max_length=50,
+        choices=MODE_CHOICES,
+        default='mixed',
+        verbose_name="Тип интервью"
+    )
+
+    questions_count = models.PositiveIntegerField(
+        default=5,
+        verbose_name="Количество вопросов"
+    )
+    interview_parameters = models.TextField(verbose_name="Параметры интервью (Промпт)", blank=True)
+
+    # Технические поля
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    chat_history = models.JSONField(default=list, verbose_name="История переписки", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"@{self.telegram_username} | {self.get_interview_mode_display()}"
+
+    class Meta:
+        verbose_name = "Сессия Telegram интервью"
+        verbose_name_plural = "Сессии Telegram интервью"
+        indexes = [
+            models.Index(fields=['telegram_username', 'status']),
+        ]
+
+    def get_system_prompt(self):
+        """
+        Генерирует детальный System Prompt для AI, включая:
+        1. Требования вакансии (Position).
+        2. Данные кандидата (Candidate).
+        3. Настройки стиля и сложности (Session settings).
+        """
+        # Безопасное получение данных (на случай, если поля пустые)
+        position = self.candidate.position
+        cand = self.candidate
+
+        # Формируем блок требований вакансии
+        requirements_text = position.requirements if position.requirements else "Требования не указаны, проверяй общие знания по названию позиции."
+
+        # Формируем блок информации о кандидате
+        candidate_info = (
+            f"ФИО: {cand.full_name}\n"
+            f"Опыт работы: {cand.experience or 'Не указан'}\n"
+            f"Технический стек: {cand.used_technologies or 'Не указан'}\n"
+            f"Языки программирования: {cand.programming_language or 'Не указан'}\n"
+            f"Образование: {cand.education or 'Не указано'}\n"
+            f"Soft Skills: {cand.soft_skills or 'Не указаны'}\n"
+            f"Владение языками: {cand.languages or 'Не указано'}"
+        )
+
+        # Формируем сам промпт
+        system_prompt = f"""
+Ты — профессиональный технический рекрутер и эксперт в найме.
+Твоя задача — провести {self.get_interview_mode_display()} собеседование с кандидатом.
+
+==============================
+ВАКАНСИЯ (КОГО МЫ ИЩЕМ):
+Название: {position.name}
+Требования к кандидату:
+{requirements_text}
+==============================
+
+==============================
+КАНДИДАТ (КТО ПРИШЕЛ):
+{candidate_info}
+==============================
+
+==============================
+ПАРАМЕТРЫ ИНТЕРВЬЮ:
+Количество вопросов, которые нужно задать (ориентировочно, можно чуть больше, чуть меньше, по необходимости): {self.questions_count}
+==============================
+
+ИНСТРУКЦИЯ ПО ВЕДЕНИЮ ДИАЛОГА:
+1. Поздоровайся с кандидатом по имени, представься (как AI-рекрутер компании) и кратко обозначь формат.
+2. Твоя цель — проверить, соответствует ли опыт кандидата требованиям вакансии. Ищи пробелы в знаниях.
+3. ЗАДАВАЙ ВОПРОСЫ СТРОГО ПО ОДНОМУ. Не отправляй список вопросов сразу.
+4. Жди ответа кандидата. После получения ответа — дай краткую обратную связь (принято/хорошо/уточни) и переходи к следующему вопросу.
+5. Если кандидат отвечает слишком коротко или уклончиво — задавай уточняющие вопросы (drill down).
+6. Если кандидат не знает ответа — поддерживай дружелюбный тон (если выбран такой стиль) и иди дальше.
+7. После того как задашь примерно {self.questions_count} основных вопросов — вежливо заверши интервью и попрощайся.
+
+Начинай диалог с приветствия.
+"""
+        return system_prompt.strip()

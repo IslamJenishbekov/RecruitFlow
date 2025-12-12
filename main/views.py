@@ -11,6 +11,7 @@ Django views для приложения RecruitFlow.
 """
 import datetime
 import logging
+import threading
 import os
 from functools import wraps
 from google_auth_oauthlib.flow import Flow
@@ -18,16 +19,19 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
+from django.db import close_old_connections, connection
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from .services.zoom_service import ZoomService
 from .services.calendar_service import GoogleCalendarService
 from django.http import HttpResponseBadRequest
+from django.db import transaction
 from .forms import *
 from .models import *
 from .services import llm_service, mail_service, parsing_servise, audio_processing
 from .repository import candidate
+
 REDIRECT_URI = 'http://127.0.0.1:8000/oauth2callback'
 
 logger = logging.getLogger(__name__)
@@ -47,6 +51,7 @@ def restrict_test_user(view_func):
     Returns:
         Обернутая функция с проверкой тестового пользователя
     """
+
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         if request.user.username.startswith('test_user'):
@@ -57,7 +62,9 @@ def restrict_test_user(view_func):
             # Редиректим на предыдущую страницу или главную
             return redirect(request.META.get('HTTP_REFERER', 'home'))
         return view_func(request, *args, **kwargs)
+
     return wrapper
+
 
 def signup(request):
     """
@@ -96,7 +103,7 @@ def projects(request):
                 'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
             )
             return redirect('home')
-            
+
         form = ProjectForm(request.POST)
         if form.is_valid():
             # Создаем проект, но пока не сохраняем в БД окончательно,
@@ -201,7 +208,7 @@ def project_detail(request, project_id):
                 'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
             )
             return redirect('project_detail', project_id=project.id)
-            
+
         form = PositionForm(request.POST)
         if form.is_valid():
             position = form.save(commit=False)
@@ -281,7 +288,7 @@ def position_detail(request, position_id):
                 'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
             )
             return redirect('position_detail', position_id=position.id)
-            
+
         form = CandidateUploadForm(request.POST, request.FILES)
         if form.is_valid():
             uploaded_file = request.FILES['cv_file']
@@ -346,51 +353,107 @@ def candidate_detail(request, candidate_id):
                 'Чтобы создать свой проект, вам надо зайти со своего аккаунта.'
             )
             return redirect('candidate_detail', candidate_id=candidate.id)
-            
+
         form = CandidateAudioForm(request.POST, request.FILES, instance=candidate)
         if form.is_valid():
-            # Сначала сохраняем файл физически
-            candidate = form.save()
+            # 1. Сохраняем файл физически и ставим статус "В обработке"
+            candidate = form.save(commit=False)
+            candidate.status = 'processing'  # Добавьте этот статус в модели, если его нет
+            candidate.save()
 
-            try:
-                # Запускаем логику транскрибации
-                # Важно: audio_file.path дает полный путь к файлу на диске
-                if candidate.audio_file:
-                    file_path = candidate.audio_file.path
+            messages.success(request,
+                             "Аудио загружено. Расшифровка началась в фоне (займет 3-10 минут). Обновите страницу позже.")
 
-                    # Вызываем сервис транскрибации
-                    transcription_text = audio_processing.get_transcription(file_path)
+            # --- ФУНКЦИЯ ДЛЯ ФОНОВОГО ПОТОКА ---
+            def background_transcription_task(cand_id, file_path):
+                logger.info(f"THREAD: Запуск фоновой задачи для кандидата {cand_id}")
 
-                    # Сохраняем транскрипцию
-                    candidate.interview_transcription = transcription_text
-                    
-                    # Извлекаем зарплату из транскрипции через LLM
+                # ВАЖНО: В начале потока закрываем "старые" соединения, 
+                # чтобы поток гарантированно создал свое собственное.
+                close_old_connections()
+
+                try:
+                    # 1. Тяжелая транскрибация (CPU bound)
+                    logger.info(f"THREAD: Старт транскрибации для {cand_id}...")
+                    #transcription_text = audio_processing.get_transcription(file_path)
+                    transcription_text = """По причине того что pytorch модели (применяемые для транскрибации и диаризации)
+                    # требует больше ресурсов на сервере,
+                    # и бесплатные лимиты быстро исчерпываются,
+                    # данная функция временно выключена ( 02.12.2025 19:12 )
+                    # """
+
+                    logger.info(
+                        f"THREAD: Транскрибация завершена для {cand_id}. Длина текста: {len(str(transcription_text))}")
+
+                    # 2. LLM (Network bound)
+                    extracted_salary = None
                     if transcription_text:
-                        llm_service_instance = llm_service.GeminiService()
-                        extracted_salary = llm_service_instance.extract_salary_from_transcription(transcription_text)
-                        if extracted_salary:
-                            candidate.waited_salary = extracted_salary
-                            logger.info(f"Извлечена зарплата для кандидата {candidate.id}: {extracted_salary}")
-                    
-                    candidate.status = 'interview_passed'  # Можно авто-менять статус
-                    candidate.save()
+                        try:
+                            llm_service_instance = llm_service.GeminiService()
+                            extracted_salary = llm_service_instance.extract_salary_from_transcription(
+                                transcription_text)
+                            logger.info(f"THREAD: Зарплата извлечена для {cand_id}: {extracted_salary}")
+                        except Exception as e_llm:
+                            logger.error(f"THREAD: Ошибка LLM для {cand_id}: {e_llm}")
 
-                    messages.success(request, "Аудио загружено и успешно расшифровано!")
-            except Exception as e:
-                logger.error(f"Ошибка при транскрибации: {e}")
-                messages.error(request, f"Ошибка при транскрибации: {e}")
+                    # 3. Сохранение в БД
+                    # ВАЖНО: Снова закрываем соединения перед работой с БД, если операция была долгой
+                    close_old_connections()
 
-            # PRG Pattern
+                    # Получаем свежий объект из БД (внутри своего потока)
+                    cand_fresh = Candidate.objects.get(id=cand_id)
+
+                    cand_fresh.interview_transcription = transcription_text
+                    if extracted_salary:
+                        cand_fresh.waited_salary = extracted_salary
+
+                    cand_fresh.status = 'interview_passed'
+                    cand_fresh.save()
+
+                    logger.info(f"THREAD: Успешно сохранено для кандидата {cand_id}")
+
+                except Exception as e:
+                    logger.error(f"THREAD: Критическая ошибка для {cand_id}: {e}")
+                    logger.error(traceback.format_exc())
+
+                    # Пытаемся записать ошибку в статус
+                    try:
+                        close_old_connections()
+                        cand_fail = Candidate.objects.get(id=cand_id)
+                        cand_fail.status = 'failed'  # Или любой статус ошибки
+                        # Можно записать ошибку в поле транскрипции, чтобы видеть её в админке
+                        # cand_fail.interview_transcription = f"Ошибка обработки: {str(e)}" 
+                        cand_fail.save()
+                    except:
+                        pass  # Если даже тут упало, просто выходим
+
+                finally:
+                    # Всегда закрываем соединение при выходе из потока
+                    close_old_connections()
+
+            # --- ЗАПУСК ПОТОКА ---
+            # Передаем ID и Путь (строки), а не сам объект Django, чтобы избежать проблем с потоками
+            file_path_str = candidate.audio_file.path
+
+            thread = threading.Thread(
+                target=background_transcription_task,
+                args=(candidate.id, file_path_str),
+                daemon=True  # Daemon значит, что поток не заблокирует выключение сервера
+            )
+            thread.start()
+
             return redirect('candidate_detail', candidate_id=candidate.id)
     else:
         form = CandidateAudioForm(instance=candidate)
-
+    interview_form = BotInterviewSetupForm()
     context = {
         'candidate': candidate,
         'form': form,
-        'project': candidate.position.project  # Для хлебных крошек
+        'project': candidate.position.project,  # Для хлебных крошек
+        'interview_form': interview_form,
     }
     return render(request, 'main/candidate_detail.html', context)
+
 
 @login_required
 @require_POST
@@ -495,7 +558,6 @@ def import_requirements_from_url(request, position_id):
     if not url:
         messages.error(request, "URL не был передан.")
         return redirect('project_detail', project_id=position.project.id)
-
 
     text = parser_service.parse(url)
     logger.info(text)
@@ -753,3 +815,152 @@ def google_auth_callback(request):
         logger.error(f"Auth Callback Error: {e}")
         messages.error(request, f"Ошибка при подключении: {e}")
         return redirect('profile')
+
+
+@login_required
+@require_POST
+def delete_candidates_mass(request):
+    """
+    Массовое удаление выбранных кандидатов.
+    """
+    candidate_ids = request.POST.getlist('candidate_ids')
+
+    if candidate_ids:
+        # Фильтруем удаление: удаляем только если пользователь имеет доступ к этому проекту
+        # (Проверяем цепочку: Candidate -> Position -> Project -> ProjectUser -> User)
+        deleted_count, _ = Candidate.objects.filter(
+            id__in=candidate_ids,
+            position__project__projectuser__user=request.user
+        ).delete()
+
+        if deleted_count > 0:
+            messages.success(request, f'Успешно удалено кандидатов: {deleted_count}')
+        else:
+            messages.warning(request, 'Не удалось удалить выбранных кандидатов (возможно, нет прав).')
+
+    return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+
+@login_required
+@require_POST
+def send_rejection_emails(request):
+    """
+    Массовая отправка писем с отказом и смена статуса на 'rejected'.
+    """
+    # 1. Проверяем, настроена ли почта у HR
+    user = request.user
+    if not user.email or not user.gmail_password:
+        messages.error(request, 'Для отправки писем укажите Email и Gmail App Password в профиле.')
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+    candidate_ids = request.POST.getlist('candidate_ids')
+
+    if candidate_ids:
+        # Получаем кандидатов (проверка прав доступа через проект)
+        candidates = Candidate.objects.filter(
+            id__in=candidate_ids,
+            position__project__projectuser__user=user
+        )
+
+        sent_count = 0
+        error_count = 0
+
+        for candidate in candidates:
+            if not candidate.gmail:
+                continue
+
+            # Текст письма (можно вынести в шаблон или настройки)
+            subject = f"Ответ по вакансии {candidate.position.name}"
+            body = (
+                f"Здравствуйте, {candidate.full_name}.\n\n"
+                f"Спасибо за проявленный интерес к вакансии \"{candidate.position.name}\".\n"
+                "Мы внимательно ознакомились с вашим резюме. К сожалению, в настоящий момент "
+                "мы не готовы пригласить вас на дальнейшее интервью, так как выбрали кандидатов, "
+                "чей опыт больше соответствует текущим задачам.\n\n"
+                "Мы сохраним ваше резюме в базе и свяжемся, если появятся подходящие позиции.\n\n"
+                "С уважением,\n"
+                f"{request.user.first_name or 'Команда HR'}"
+            )
+
+            try:
+                # Отправка через ваш сервис
+                mail_service.MailService.send_message(
+                    sender_email=user.email,
+                    subject=subject,
+                    body=body,
+                    pwd=user.gmail_password,
+                    to_email=candidate.gmail
+                )
+
+                # Обновляем статус
+                candidate.status = 'rejected'
+                candidate.save()
+                sent_count += 1
+
+            except Exception as e:
+                logger.error(f"Ошибка отправки для {candidate.gmail}: {e}")
+                error_count += 1
+
+        if sent_count > 0:
+            messages.success(request, f'Отправлено писем с отказом: {sent_count}.')
+        if error_count > 0:
+            messages.warning(request, f'Не удалось отправить: {error_count}. Проверьте логи.')
+
+    else:
+        messages.info(request, 'Не выбрано ни одного кандидата.')
+
+    return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+
+@login_required
+@require_POST
+def schedule_bot_interview(request, candidate_id):
+    candidate = get_object_or_404(Candidate, id=candidate_id)
+
+    if not candidate.telegram:
+        messages.error(request, "У кандидата не указан Telegram username!")
+        return redirect('candidate_detail', candidate_id=candidate.id)
+
+    form = BotInterviewSetupForm(request.POST)
+    if form.is_valid():
+
+        # Очищаем юзернейм
+        clean_username = candidate.telegram.replace('@', '').strip()
+        if "https" in clean_username:
+            clean_username = clean_username.replace("https://t.me/", "")
+
+        # --- НАЧАЛО ИЗМЕНЕНИЙ: Логика уникальности ---
+        with transaction.atomic():
+            # 1. Ищем старые АКТИВНЫЕ сессии для этого юзернейма
+            old_sessions = BotInterviewSession.objects.filter(
+                telegram_username=clean_username,
+                status='active'
+            )
+
+            # 2. Если нашли — "архивируем" их (меняем статус на cancelled)
+            if old_sessions.exists():
+                count = old_sessions.update(status='cancelled')
+                # Можно добавить сообщение в лог, если нужно
+                print(f"Отменено {count} старых сессий для {clean_username}")
+
+            # 3. Создаем новую сессию
+            session = form.save(commit=False)
+            session.candidate = candidate
+            session.telegram_username = clean_username
+
+            # Генерируем промпт
+            session.interview_parameters = session.get_system_prompt()
+
+            # Сохраняем новую (она по умолчанию status='active')
+            session.save()
+
+            # Меняем статус кандидата
+            candidate.status = 'interview_scheduled'
+            candidate.save()
+        # --- КОНЕЦ ИЗМЕНЕНИЙ ---
+
+        messages.success(request, f"Новое интервью назначено! Старые сессии для @{clean_username} отменены.")
+    else:
+        messages.error(request, "Ошибка при создании интервью. Проверьте введенные данные.")
+
+    return redirect('candidate_detail', candidate_id=candidate.id)

@@ -27,9 +27,11 @@ class CustomUserCreationForm(UserCreationForm):
         username: Имя пользователя
         email: Email адрес
     """
+
     class Meta(UserCreationForm.Meta):
         model = CustomUser
-        fields = ('username', 'email') # Укажите поля, которые будут на форме регистрации
+        fields = ('username', 'email')  # Укажите поля, которые будут на форме регистрации
+
 
 class CustomUserChangeForm(UserChangeForm):
     """
@@ -39,9 +41,11 @@ class CustomUserChangeForm(UserChangeForm):
         username: Имя пользователя
         email: Email адрес
     """
+
     class Meta:
         model = CustomUser
         fields = ('username', 'email')
+
 
 class ProjectForm(forms.ModelForm):
     """
@@ -53,6 +57,7 @@ class ProjectForm(forms.ModelForm):
     Widgets:
         name: TextInput с классом 'form-control' и placeholder
     """
+
     class Meta:
         model = Project
         fields = ['name']
@@ -76,6 +81,7 @@ class PositionForm(forms.ModelForm):
         name: TextInput с классом 'form-control' и placeholder
         requirements: Textarea с 5 строками и placeholder
     """
+
     class Meta:
         model = Position
         fields = ['name', 'requirements']
@@ -125,8 +131,11 @@ class ProfileSettingsForm(forms.ModelForm):
 
     class Meta:
         model = CustomUser
-        # Добавляем поля зума в список
-        fields = ['email', 'gmail_password', 'zoom_account_id', 'zoom_client_id', 'zoom_client_secret']
+        fields = [
+            'email', 'gmail_password',
+            'zoom_account_id', 'zoom_client_id', 'zoom_client_secret',
+            'telegram_bot_token', 'telegram_bot_link'
+        ]
 
         widgets = {
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
@@ -137,6 +146,15 @@ class ProfileSettingsForm(forms.ModelForm):
                 attrs={'class': 'form-control', 'placeholder': 'Например: abc123XYZ...'}),
             'zoom_client_id': forms.TextInput(attrs={'class': 'form-control'}),
             'zoom_client_secret': forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+
+            'telegram_bot_token': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '123456789:ABCdef-_Gw...'
+            }),
+            'telegram_bot_link': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://t.me/MyBot'
+            }),
         }
         labels = {
             'email': 'Служебная почта',
@@ -144,6 +162,8 @@ class ProfileSettingsForm(forms.ModelForm):
             'zoom_account_id': 'Zoom Account ID',
             'zoom_client_id': 'Zoom Client ID',
             'zoom_client_secret': 'Zoom Client Secret',
+            'telegram_bot_token': 'Token бота (от BotFather)',
+            'telegram_bot_link': 'Ссылка на бота',
         }
 
     def clean_credentials_file(self):
@@ -184,6 +204,7 @@ class ProfileSettingsForm(forms.ModelForm):
             user.save()
         return user
 
+
 class CandidateUploadForm(forms.Form):
     """
     Форма для загрузки файла резюме кандидата.
@@ -198,9 +219,10 @@ class CandidateUploadForm(forms.Form):
         label="Файл резюме",
         widget=forms.FileInput(attrs={
             'class': 'form-control',
-            'accept': '.pdf,.docx' # Ограничиваем выбор файлов
+            'accept': '.pdf,.docx'  # Ограничиваем выбор файлов
         })
     )
+
 
 class CandidateAudioForm(forms.ModelForm):
     """
@@ -212,6 +234,7 @@ class CandidateAudioForm(forms.ModelForm):
     Validation:
         Принимает только аудиофайлы (audio/*)
     """
+
     class Meta:
         model = Candidate
         fields = ['audio_file']
@@ -221,4 +244,23 @@ class CandidateAudioForm(forms.ModelForm):
                 'accept': 'audio/*',  # Разрешаем только аудиофайлы
                 'id': 'audioInput'
             })
+        }
+
+
+class BotInterviewSetupForm(forms.ModelForm):
+    """
+    Форма для настройки параметров AI-интервью.
+    """
+
+    class Meta:
+        model = BotInterviewSession
+        fields = ['interview_mode', 'questions_count']
+
+        widgets = {
+            'interview_mode': forms.Select(attrs={'class': 'form-select'}),
+            'questions_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 20})
+        }
+        labels = {
+            'interview_mode': 'Тип интервью',
+            'questions_count': 'Количество вопросов'
         }

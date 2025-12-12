@@ -23,10 +23,7 @@ class ASRService:
 
     def __new__(cls, *args, **kwargs):
         """
-        Создает единственный экземпляр сервиса (Singleton паттерн).
-        
-        Returns:
-            ASRService: Единственный экземпляр сервиса
+        Создает единственный экземпляр сервиса (Singleton).
         """
         if cls._instance is None:
             logger.info("Экземпляр ASRService еще не создан. Создаем новый.")
@@ -36,22 +33,34 @@ class ASRService:
 
         return cls._instance
 
-    def __init__(self, model_name="v2_rnnt"):
+    def __init__(self, model_name="v2_ctc"):
         """
-        Инициализирует сервис ASR и загружает модель GigaAM.
-        
-        Args:
-            model_name: Название модели GigaAM для загрузки (по умолчанию "v2_rnnt")
-            
-        Note:
-            Модель загружается только при первом создании экземпляра.
-            Последующие вызовы используют уже загруженную модель.
+        Инициализирует сервис.
+        В Python __init__ вызывается ВСЕГДА после __new__.
+        Поэтому нам нужна защита (if getattr...), чтобы не грузить модель дважды.
         """
+        # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+        # Проверяем, есть ли у этого объекта флаг _initialized.
+        # Если есть и он True — значит модель уже загружена, выходим.
+        if getattr(self, '_initialized', False):
+            return
+
+        # Если мы здесь — значит это первый запуск. Грузим модель.
         import gigaam
-        logger.info("Первичная инициализация ASRService...")
-        self.model = gigaam.load_model(model_name)
-        self._initialized = True  # Ставим флаг, что инициализация прошла
-        logger.info("ASR модель успешно создана и готова к работе")
+        logger.info("Первичная инициализация ASRService (загрузка GigaAM)...")
+        
+        try:
+            self.model = gigaam.load_model(model_name)
+            logger.info("ASR модель успешно создана и готова к работе")
+            
+            # Ставим "галочку", что инициализация прошла успешно
+            self._initialized = True
+            
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке модели ASR: {e}")
+            # Если упало — не ставим _initialized, чтобы в следующий раз
+            # система попыталась загрузить модель снова.
+            raise e
 
     def transcribe(self, audio_filepath: str) -> str:
         """

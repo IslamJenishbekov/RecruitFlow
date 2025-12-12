@@ -19,4 +19,7 @@ urlpatterns = [
     path('schedule-mass/', views.schedule_interviews, name='schedule_interviews'),
     path('google-auth/start/', views.start_google_auth, name='start_google_auth'),
     path('oauth2callback/', views.google_auth_callback, name='google_auth_callback'),
+    path('candidates/mass-delete/', views.delete_candidates_mass, name='delete_candidates_mass'),
+    path('candidates/mass-reject/', views.send_rejection_emails, name='send_rejection_emails'),
+    path('candidates/<int:candidate_id>/schedule-bot/', views.schedule_bot_interview, name='schedule_bot_interview'),
 ]

@@ -7,7 +7,8 @@
 """
 import io
 import logging
-
+import smtplib
+from email.message import EmailMessage
 from imap_tools import MailBox
 
 from . import doc_reader_service
@@ -22,6 +23,7 @@ class MailService:
     Подключается к Gmail через IMAP, получает последние письма,
     извлекает вложения (резюме) и парсит их содержимое.
     """
+
     @staticmethod
     def get_last_messages(mail, pwd, num_of_messages: int = 50):
         """
@@ -89,3 +91,17 @@ class MailService:
             logger.error(f"Error parsing mail: {e}")
 
         return processed_messages
+
+    @staticmethod
+    def send_message(sender_email, subject, body, pwd, to_email):
+        msg = EmailMessage()
+        msg['From'] = sender_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.set_content(body)
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(sender_email, pwd)
+            smtp.send_message(msg)
+            logger.info(f"Сообщение {to_email} отправлено")
+

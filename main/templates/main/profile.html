@@ -5,7 +5,7 @@
         <h1 class="h2 mb-4">Личный кабинет</h1>
 
         <div class="row">
-            <!-- ЛЕВАЯ КОЛОНКА: Инфо о пользователе -->
+            <!-- ЛЕВАЯ КОЛОНКА (без изменений) -->
             <div class="col-lg-4 mb-4">
                 <div class="card shadow-sm mb-4 border-0">
                     <div class="card-body text-center py-5">
@@ -56,7 +56,6 @@
                     </div>
                     <div class="card-body">
 
-                        <!-- ЕДИНАЯ ФОРМА ДЛЯ ВСЕХ ПОЛЕЙ -->
                         <form method="post" enctype="multipart/form-data">
                             {% csrf_token %}
 
@@ -79,17 +78,12 @@
                             <!-- 2. Gmail Integration -->
                             <div class="mb-5">
                                 <h6 class="text-muted text-uppercase small fw-bold mb-3">Gmail (Чтение резюме)</h6>
-
                                 <div class="alert alert-light border d-flex align-items-start p-3 mb-3">
                                     <i class="bi bi-info-circle-fill text-primary fs-5 me-3 mt-1"></i>
                                     <div class="small text-muted">
-                                        Для автоматического чтения резюме из почты требуется <strong>Пароль
-                                        приложения</strong>.
-                                        Обычный пароль от аккаунта Google не подойдет, если включена двухфакторная
-                                        аутентификация.
+                                        Для автоматического чтения резюме из почты требуется <strong>Пароль приложения</strong>.
                                     </div>
                                 </div>
-
                                 <div class="mb-3">
                                     <label class="form-label fw-bold">Gmail App Password</label>
                                     <div class="input-group">
@@ -103,74 +97,44 @@
                             </div>
 
                             <!-- 3. Google Calendar Integration -->
-                            <!-- 3. Google Calendar Integration -->
                             <div class="mb-5">
-                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Google Calendar
-                                    (Планирование)</h6>
-
-                                <!-- ЛОГИКА ОТОБРАЖЕНИЯ СТАТУСА -->
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Google Calendar (Планирование)</h6>
                                 {% if user.google_credentials and user.google_credentials.refresh_token %}
-                                    <!-- Если есть refresh_token — значит всё работает -->
                                     <div class="alert alert-success d-flex align-items-center p-2 mb-3">
                                         <i class="bi bi-check-circle-fill fs-5 me-2"></i>
-                                        <div><strong>Подключено и работает.</strong> Система может создавать встречи.
-                                        </div>
+                                        <div><strong>Подключено.</strong></div>
                                     </div>
-
                                 {% elif user.google_credentials %}
-                                    <!-- Файл загружен, но авторизация не пройдена -->
                                     <div class="alert alert-warning p-3 mb-3">
                                         <div class="d-flex align-items-center mb-2">
                                             <i class="bi bi-exclamation-circle-fill fs-5 me-2"></i>
                                             <strong>Требуется авторизация</strong>
                                         </div>
-                                        <p class="small mb-2">Файл настроек загружен. Теперь нужно разрешить доступ к
-                                            календарю.</p>
                                         <a href="{% url 'start_google_auth' %}" class="btn btn-sm btn-outline-dark">
                                             <i class="bi bi-google me-1"></i> Разрешить доступ
                                         </a>
                                     </div>
-
                                 {% else %}
-                                    <!-- Ничего не загружено -->
                                     <div class="alert alert-secondary d-flex align-items-center p-2 mb-3">
                                         <i class="bi bi-x-circle fs-5 me-2"></i>
-                                        <div>Credentials отсутствуют. Загрузите файл ниже.</div>
+                                        <div>Credentials отсутствуют.</div>
                                     </div>
                                 {% endif %}
-
                                 <div class="mb-3">
                                     <label class="form-label fw-bold">Обновить credentials.json</label>
                                     {{ form.credentials_file }}
-                                    <div class="form-text text-muted">
-                                        Если вы загрузите новый файл, потребуется повторная авторизация.
-                                    </div>
                                 </div>
                             </div>
 
                             <!-- 4. Zoom Integration -->
-                            <div class="mb-4">
-                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Zoom (Server-to-Server
-                                    OAuth)</h6>
-
+                            <div class="mb-5">
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Zoom (Server-to-Server OAuth)</h6>
                                 {% if user.zoom_account_id and user.zoom_client_id %}
                                     <div class="alert alert-success d-flex align-items-center p-2 mb-3">
                                         <i class="bi bi-camera-video-fill fs-5 me-2"></i>
-                                        <div><strong>Zoom подключен.</strong> Ссылки на встречи будут создаваться от
-                                            вашего имени.
-                                        </div>
-                                    </div>
-                                {% else %}
-                                    <div class="alert alert-light border d-flex align-items-start p-3 mb-3">
-                                        <i class="bi bi-info-circle-fill text-primary fs-5 me-3 mt-1"></i>
-                                        <div class="small text-muted">
-                                            Создайте приложение типа "Server-to-Server OAuth" в <a
-                                                href="https://marketplace.zoom.us/" target="_blank">Zoom Marketplace</a>,
-                                            чтобы получить ключи.
-                                        </div>
+                                        <div><strong>Zoom подключен.</strong></div>
                                     </div>
                                 {% endif %}
-
                                 <div class="mb-3">
                                     <label class="form-label fw-bold">Account ID</label>
                                     {{ form.zoom_account_id }}
@@ -187,6 +151,46 @@
                                 </div>
                             </div>
 
+                            <!-- 5. Telegram Integration (НОВОЕ) -->
+                            <div class="mb-4">
+                                <h6 class="text-muted text-uppercase small fw-bold mb-3">Telegram (Бот-собеседник)</h6>
+
+                                {% if user.telegram_bot_token %}
+                                    <div class="alert alert-success d-flex align-items-center p-2 mb-3">
+                                        <i class="bi bi-robot fs-5 me-2"></i>
+                                        <div><strong>Бот подключен.</strong> Токен сохранен.</div>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-light border d-flex align-items-start p-3 mb-3">
+                                        <i class="bi bi-telegram text-info fs-5 me-3 mt-1"></i>
+                                        <div class="small text-muted">
+                                            Создайте бота через <a href="https://t.me/BotFather" target="_blank" class="fw-bold">@BotFather</a>.
+                                            Вставьте сюда полученный Token и ссылку на вашего бота.
+                                        </div>
+                                    </div>
+                                {% endif %}
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Telegram Bot Token</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light text-muted">API:</span>
+                                        {{ form.telegram_bot_token }}
+                                    </div>
+                                    {% if form.telegram_bot_token.errors %}
+                                        <div class="text-danger small mt-1">{{ form.telegram_bot_token.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Ссылка на бота</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="bi bi-link-45deg"></i></span>
+                                        {{ form.telegram_bot_link }}
+                                    </div>
+                                    <div class="form-text">Пример: https://t.me/MyCompanyHiringBot</div>
+                                </div>
+                            </div>
+
                             <hr>
 
                             <div class="d-flex justify-content-end">
@@ -195,46 +199,48 @@
                                 </button>
                             </div>
                         </form>
-                        <!-- КОНЕЦ ФОРМЫ -->
 
                     </div>
                 </div>
 
-                <!-- Блок инструкций -->
-                <div class="row mt-4">
-                    <div class="col-md-4 mb-3">
+                <!-- Блок инструкций (ОБНОВЛЕНО: 2 колонки по 2 карточки) -->
+                <div class="row row-cols-1 row-cols-md-2 g-3 mt-4">
+                    <!-- Gmail -->
+                    <div class="col">
                         <div class="card h-100 border-0 bg-white shadow-sm">
                             <div class="card-body">
-                                <h6 class="card-title fw-bold text-primary"><i class="bi bi-envelope me-2"></i>Gmail
-                                </h6>
-                                <p class="small text-muted mb-0">Security -> 2FA -> App Passwords.</p>
+                                <h6 class="card-title fw-bold text-primary"><i class="bi bi-envelope me-2"></i>Gmail</h6>
+                                <p class="small text-muted mb-0">Google Security -> 2FA -> App Passwords.</p>
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-md-4 mb-3">
+                    <!-- Calendar -->
+                    <div class="col">
                         <div class="card h-100 border-0 bg-white shadow-sm">
                             <div class="card-body">
-                                <h6 class="card-title fw-bold text-success"><i class="bi bi-calendar-event me-2"></i>Calendar
-                                </h6>
-                                <p class="small text-muted mb-0">Google Cloud -> APIs -> OAuth Client ID -> Download
-                                    JSON.</p>
+                                <h6 class="card-title fw-bold text-success"><i class="bi bi-calendar-event me-2"></i>Calendar</h6>
+                                <p class="small text-muted mb-0">Google Cloud -> APIs -> OAuth Client ID -> JSON.</p>
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-md-4 mb-3">
+                    <!-- Zoom -->
+                    <div class="col">
                         <div class="card h-100 border-0 bg-white shadow-sm">
                             <div class="card-body">
-                                <h6 class="card-title fw-bold text-info"><i class="bi bi-camera-video me-2"></i>Zoom
-                                </h6>
-                                <ol class="small text-muted ps-3 mb-0">
-                                    <li><a href="https://marketplace.zoom.us/" target="_blank">Zoom Marketplace</a> ->
-                                        Develop -> Build App.
-                                    </li>
-                                    <li>Выберите <strong>Server-to-Server OAuth</strong>.</li>
-                                    <li>Скопируйте Account ID, Client ID и Secret.</li>
-                                </ol>
+                                <h6 class="card-title fw-bold text-info"><i class="bi bi-camera-video me-2"></i>Zoom</h6>
+                                <p class="small text-muted mb-0">Marketplace -> Server-to-Server OAuth.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Telegram (ДОБАВЛЕНО) -->
+                    <div class="col">
+                        <div class="card h-100 border-0 bg-white shadow-sm">
+                            <div class="card-body">
+                                <h6 class="card-title fw-bold text-primary" style="color: #0088cc !important;"><i class="bi bi-telegram me-2"></i>Telegram</h6>
+                                <p class="small text-muted mb-0">Пишем <a href="https://t.me/BotFather" target="_blank">@BotFather</a> -> /newbot -> копируем токен.</p>
                             </div>
                         </div>
                     </div>
