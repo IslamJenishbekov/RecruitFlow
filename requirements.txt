@@ -97,7 +97,7 @@ nvidia-nvtx-cu12==12.4.127
 oauthlib==3.3.1
 omegaconf==2.3.0
 onnx==1.17.0
-onnxruntime==1.17.3
+onnxruntime==1.23.2
 opentelemetry-api==1.38.0
 opentelemetry-exporter-otlp==1.38.0
 opentelemetry-exporter-otlp-proto-common==1.38.0
@@ -135,6 +135,7 @@ python-crontab==3.3.0
 python-dateutil==2.9.0.post0
 python-docx==1.2.0
 python-dotenv==1.2.1
+python-telegram-bot==22.5
 pytorch-lightning==2.5.6
 pytorch-metric-learning==2.9.0
 pytz==2025.2

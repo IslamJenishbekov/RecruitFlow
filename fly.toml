@@ -1,53 +1,49 @@
-app = "recruitflow-uscaef"
-primary_region = "fra"
+# fly.toml app configuration file generated for recruitflow-uscaef on 2025-12-12T21:07:25+06:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'recruitflow-uscaef'
+primary_region = 'fra'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
+
+[env]
+  PORT = '8000'
+  TORCH_HOME = '/app/media/torch_cache'
+  XDG_CACHE_HOME = '/app/media/cache'
 
 [processes]
-  # Заменили 0.0.0.0 на [::]
-  app = "gunicorn RecruitFlow.wsgi:application --bind [::]:8000 --workers 1 --threads 4 --timeout 300"
+  app = 'gunicorn RecruitFlow.wsgi:application --bind [::]:8000 --workers 1 --threads 4 --timeout 300'
 
-# --- НАСТРОЙКИ ЖЕЛЕЗА ---
-[vm]
-  memory = "2gb"      # Жестко задаем 2 ГБ RAM
-  cpu_kind = "shared" # Используем общий CPU (дешевле)
-  cpus = 1            # 1 vCPU
+[[mounts]]
+  source = 'recruitflow_data'
+  destination = '/app/media'
 
 [[services]]
-  processes = ["app"]
-  protocol = "tcp"
+  protocol = 'tcp'
   internal_port = 8000
-
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
+  processes = ['app']
 
   [[services.ports]]
     port = 80
-    handlers = ["http"]
+    handlers = ['http']
     force_https = true
 
   [[services.ports]]
     port = 443
-    handlers = ["tls", "http"]
+    handlers = ['tls', 'http']
 
-  # --- ВОТ ЭТО МЕНЯЕМ ---
-  # Убрали http_checks, поставили tcp_checks
   [[services.tcp_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "30s" # Даем 30 сек на старт, просто проверяем порт
-    restart_limit = 0
+    interval = '10s'
+    timeout = '2s'
+    grace_period = '30s'
 
-[env]
-  PORT = "8000"
-  TORCH_HOME = "/app/media/torch_cache"
-  XDG_CACHE_HOME = "/app/media/cache"
-
-[[mounts]]
-  source = "recruitflow_data"
-  destination = "/app/media"
-
-[swap]
-  size_mb = 4096 # Добавить 1 ГБ swap
+[[vm]]
+  memory = '2gb'
+  cpu_kind = 'shared'
+  cpus = 1
